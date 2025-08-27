@@ -1,0 +1,3323 @@
+import torch
+import numpy as np
+import pyaudio
+import threading
+import queue
+import time
+import requests
+import json
+from TTS.api import TTS
+import re
+import signal
+import os
+from PIL import Image
+from datetime import datetime, timedelta
+import jwt
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+from typing import List, Dict, Any, Optional
+from auth import get_current_user_token, TokenData, get_current_user_data
+from config import supabase, SECRET_KEY, ALGORITHM
+import logging
+
+# Security
+security = HTTPBearer()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/lectures/class7/science/physics/waves/level1", tags=["physics-lecture"])
+
+class PhysicsLectureStreamer:
+    def __init__(self, gemini_api_key=None, gemini_url=None):
+        # Try to use GPU for faster processing
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"🚀 Using device: {device}")
+        
+        # Initialize TTS with clear female voice and optimized speed
+        try:
+            # Use VITS with female speaker for clear female voice
+            self.tts = TTS("tts_models/en/vctk/vits", progress_bar=False, gpu=False)
+            self.speaker = "p225"  # Female speaker for VITS
+            self.tts_speed = 2.0  # Increase speed for faster processing (target: ~1 second)
+            print("✅ Using VITS female voice model (p225) - clear and natural with 2.0x speed")
+        except Exception as e:
+            print(f"⚠️  Failed to load VITS female model: {e}")
+            try:
+                # Fallback to another female voice model
+                self.tts = TTS("tts_models/en/ljspeech/fast_pitch", progress_bar=False, gpu=False)
+                self.speaker = None
+                self.tts_speed = 2.0  # Increase speed for faster processing (target: ~1 second)
+                print("✅ Using fast_pitch model as fallback (clear female voice with 2.0x speed)")
+            except Exception as e2:
+                print(f"❌ Failed to load alternative TTS model: {e2}")
+                try:
+                    # Last fallback to tacotron2-DDC
+                    self.tts = TTS("tts_models/en/ljspeech/tacotron2-DDC", progress_bar=False, gpu=False)
+                    self.speaker = None
+                    self.tts_speed = 2.0  # Increase speed for faster processing (target: ~1 second)
+                    print("✅ Using tacotron2-DDC TTS model as final fallback with 2.0x speed")
+                except Exception as e3:
+                    print(f"❌ Failed to load any TTS model: {e3}")
+                    self.tts = None
+                    self.speaker = None
+        
+        # Audio settings optimized for clear female voice (like smooth TTS)
+        self.sample_rate = 22050  # Lower sample rate for better compatibility
+        self.chunk_size = 2048
+        self.channels = 1
+        self.chunk_duration = 0.1
+        
+        # Initialize PyAudio
+        self.p = pyaudio.PyAudio()
+        self.stream = None
+        self.open_audio_stream()
+        self.audio_queue = queue.Queue(maxsize=1000)  # Increased from 500 to 1000
+        self.is_playing = False
+        
+        # Audio playback settings
+        self.audio_chunk_size = 2048  # Smaller chunks for better compatibility
+        
+        # Gemini AI settings
+        self.gemini_api_key = gemini_api_key
+        self.gemini_url = gemini_url
+        
+        # Thread lock for TTS synthesis
+        self.tts_lock = threading.Lock()
+        
+        # Audio streaming thread - keep it persistent
+        self.audio_thread = None
+        self.audio_thread_running = False
+        
+        # Audio pause state
+        self.audio_paused = False
+        self.audio_pause_lock = threading.Lock()
+        
+        # Lecture state
+        self.current_lecture_section = None
+        
+        # Image handling
+        self.images_folder = "/Users/koushal/Desktop/studybuddy_1/backend/lectures/class7/science/physics/waves/pictures"
+        self.current_image = None
+        self.current_diagram_info = None
+        
+        # Q&A settings - disabled by default since we're removing speech recognition
+        self.qa_enabled = False
+        
+        # Lecture state tracking
+        self.lecture_running = False
+        self.lecture_paused = False
+        self.current_section_index = 0
+        self.sections = [
+            "introduction",
+            "what_are_waves", 
+            "types_of_waves",
+            "medium_vs_vacuum",
+            "real_world_examples",
+            "diagram_explanation",
+            "ending_lecture"  # New ending slide
+        ]
+        
+        # NEW: Transcript generation
+        self.transcript = []
+        self.transcript_lock = threading.Lock()
+        self.lecture_start_time = None
+        self.section_start_times = {}
+        
+        # Lecture control
+        self.lecture_thread = None
+        self.lecture_control_lock = threading.Lock()
+    
+    def disable_qa(self):
+        """Disable Q&A sessions"""
+        self.qa_enabled = False
+        print("🔇 Q&A sessions disabled")
+    
+    def enable_qa(self):
+        """Enable Q&A sessions (text-based only)"""
+        self.qa_enabled = True
+        print("⌨️  Q&A sessions enabled (text input only)")
+    
+    def change_voice_to_female(self):
+        """Change to a clear female voice"""
+        try:
+            # Try different female voice models with proper speaker handling
+            female_models = [
+                ("tts_models/en/vctk/vits", "p225"),  # Best female voice (p225)
+                ("tts_models/en/vctk/vits", "p227"),  # Alternative female speaker
+                ("tts_models/en/ljspeech/fast_pitch", None),  # Clear female voice
+                ("tts_models/en/ljspeech/tacotron2-DDC", None)  # Good female voice
+            ]
+            
+            for model, speaker in female_models:
+                try:
+                    print(f"🎤 Trying female voice model: {model}")
+                    self.tts = TTS(model, progress_bar=False, gpu=False)
+                    self.speaker = speaker
+                    print(f"✅ Successfully loaded female voice: {model}")
+                    return True
+                except Exception as e:
+                    print(f"❌ Failed to load {model}: {e}")
+                    continue
+            
+            print("❌ Could not load any female voice model")
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error changing voice: {e}")
+            return False
+    
+    def change_voice_to_male(self):
+        """Change to a male voice"""
+        try:
+            # Try different male voice models with proper speaker handling
+            male_models = [
+                ("tts_models/en/ljspeech/fast_pitch", None),  # Good male voice
+                ("tts_models/en/ljspeech/tacotron2-DDC", None),  # Alternative male voice
+                ("tts_models/en/vctk/vits", "p226")  # Male speaker for VITS
+            ]
+            
+            for model, speaker in male_models:
+                try:
+                    print(f"🎤 Trying male voice model: {model}")
+                    self.tts = TTS(model, progress_bar=False, gpu=False)
+                    self.speaker = speaker
+                    print(f"✅ Successfully loaded male voice: {model}")
+                    return True
+                except Exception as e:
+                    print(f"❌ Failed to load {model}: {e}")
+                    continue
+            
+            print("❌ Could not load any male voice model")
+            return False
+            
+        except Exception as e:
+            print(f"❌ Error changing voice: {e}")
+            return False
+    
+    def list_available_voices(self):
+        """List available TTS voices"""
+        try:
+            models = TTS.list_models()
+            print("🎤 Available TTS models:")
+            for i, model in enumerate(models[:10]):  # Show first 10
+                print(f"  {i+1}. {model}")
+            print("... and more")
+        except Exception as e:
+            print(f"❌ Error listing models: {e}")
+        
+    def open_audio_stream(self):
+        """Open audio stream for playback"""
+        try:
+            self.stream = self.p.open(
+                format=pyaudio.paFloat32,
+                channels=self.channels,
+                rate=self.sample_rate,
+                output=True,
+                frames_per_buffer=self.chunk_size
+            )
+            print("🎵 Audio stream opened successfully")
+            # Test the audio stream with a short beep
+            test_audio = np.sin(2 * np.pi * 440 * np.linspace(0, 0.1, int(0.1 * self.sample_rate))) * 0.1
+            self.stream.write(test_audio.astype(np.float32).tobytes())
+            print("🔊 Audio stream test successful - you should hear a short beep")
+        except Exception as e:
+            print(f"❌ Audio stream error: {e}")
+            print("🔄 Trying alternative audio configuration...")
+            
+            try:
+                self.stream = self.p.open(
+                    format=pyaudio.paInt16,
+                    channels=self.channels,
+                    rate=self.sample_rate,
+                    output=True,
+                    frames_per_buffer=self.chunk_size
+                )
+                print("🎵 Audio stream opened with alternative format")
+                # Test the audio stream with a short beep
+                test_audio = np.sin(2 * np.pi * 440 * np.linspace(0, 0.1, int(0.1 * self.sample_rate))) * 0.1
+                self.stream.write(test_audio.astype(np.int16).tobytes())
+                print("🔊 Audio stream test successful with alternative format")
+            except Exception as e2:
+                print(f"❌ Alternative audio stream error: {e2}")
+                print("⚠️  Audio playback may not work properly")
+    
+    def close_audio_stream(self):
+        """Close audio stream"""
+        if self.stream:
+            self.stream.close()
+            print("🎵 Audio stream closed")
+    
+    def start_audio_thread(self):
+        """Start the audio streaming thread"""
+        if not self.audio_thread_running:
+            self.audio_thread_running = True
+            self.audio_thread = threading.Thread(target=self.persistent_audio_stream, daemon=True)
+            self.audio_thread.start()
+            print("🎵 Audio thread started")
+    
+    def stop_audio_thread(self):
+        """Stop the audio streaming thread"""
+        self.audio_thread_running = False
+        if self.audio_thread:
+            self.audio_thread.join(timeout=2)
+            print("🎵 Audio thread stopped")
+    
+    def persistent_audio_stream(self):
+        """Persistent audio streaming thread"""
+        print("🎵 Starting persistent audio stream...")
+        
+        while self.audio_thread_running:
+            try:
+                # Check if audio is paused
+                with self.audio_pause_lock:
+                    if self.audio_paused and not getattr(self, 'interactive_diagram_active', False):
+                        time.sleep(0.1)  # Sleep briefly when paused (but not for interactive diagram)
+                        continue
+                
+                # Get audio chunk from queue
+                audio_chunk = self.audio_queue.get(timeout=1)
+                
+                if audio_chunk is None:  # Stop signal
+                    break
+                
+                # Check pause state again before playing
+                with self.audio_pause_lock:
+                    if self.audio_paused and not getattr(self, 'interactive_diagram_active', False):
+                        # Put the chunk back in queue for later (but not for interactive diagram)
+                        self.audio_queue.put(audio_chunk)
+                        time.sleep(0.1)
+                        continue
+                
+                # Play the audio chunk
+                if self.stream and self.stream.is_active():
+                    self.stream.write(audio_chunk)
+                
+                self.audio_queue.task_done()
+                
+            except queue.Empty:
+                # No audio in queue, continue
+                continue
+            except Exception as e:
+                print(f"❌ Audio streaming error: {e}")
+                continue
+        
+        print("🎵 Audio stream ended")
+    
+    def generate_answer_to_question(self, question, current_topic):
+        """Generate an answer to a student's question using Gemini"""
+        if not self.gemini_api_key or not self.gemini_url:
+            return self.get_fallback_answer(question, current_topic)
+        
+        try:
+            url_with_key = f"{self.gemini_url}?key={self.gemini_api_key}"
+            
+            prompt = f"""
+            A Class 7 Physics student (12-13 years old) just asked this AMAZING question about waves: "{question}"
+            
+            The current topic being discussed is: {current_topic}
+            
+            Please provide the BEST, most helpful answer in the world that:
+            - Is super friendly and encouraging (like talking to a friend!)
+            - Uses fun, energetic language with exclamation marks!
+            - Includes phrases like "That's a GREAT question!", "You're thinking like a scientist!", "How awesome is that?"
+            - Uses words like "amazing", "incredible", "super cool", "mind-blowing"
+            - Gives real-world examples they can relate to
+            - Explains things in the most exciting way possible
+            - Makes them feel smart and capable
+            - Encourages curiosity and further questions
+            - Is 150-200 words long (more detailed and helpful)
+            - Includes fun analogies and comparisons
+            - Makes complex concepts feel simple and exciting
+            - Ends with encouragement to ask more questions
+            - Makes them feel like they're discovering something incredible!
+            """
+            
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "contents": [{
+                    "parts": [{
+                        "text": prompt
+                    }]
+                }]
+            }
+            
+            response = requests.post(url_with_key, headers=headers, json=data)
+            
+            if response.status_code == 200:
+                result = response.json()
+                generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                print(f"🤖 Gemini generated answer: {len(generated_text)} characters")
+                return generated_text
+            else:
+                print(f"❌ Gemini API error: {response.status_code}")
+                print(f"Response: {response.text}")
+                return self.get_fallback_answer(question, current_topic)
+                
+        except Exception as e:
+            print(f"❌ Error calling Gemini API: {e}")
+            return self.get_fallback_answer(question, current_topic)
+    
+    def get_fallback_answer(self, question, current_topic):
+        """Fallback answer when Gemini is not available"""
+        return (
+            f"That's an AMAZING question about {current_topic}! You're thinking like a super scientist! "
+            "Waves are absolutely incredible because they're nature's way of sending energy and messages from one place to another! "
+            "Think about how sound waves travel through the air to reach your ears - it's like invisible messengers carrying your favorite music! "
+            "Or how light waves travel from the sun to help you see all the beautiful colors around you - it's mind-blowing! "
+            "Waves can travel through different materials like air, water, and even solid objects - they're super versatile! "
+            "Keep asking these awesome questions - that's exactly how amazing discoveries are made! You're becoming a wave expert!"
+        )
+    
+    def handle_qa_session(self, current_topic):
+        """Handle Q&A session after each topic (text-based only)"""
+        if not self.qa_enabled:
+            return
+        
+        print(f"\n❓ Q&A Session for: {current_topic}")
+        print("-" * 40)
+        
+        # Ask if student has questions
+        question_prompt = f"Awesome! Do you have any AMAZING questions about {current_topic}? I'd love to hear what you're curious about! Please type 'yes' or 'no'."
+        print(f"⌨️  {question_prompt}")
+        
+        # Synthesize the question
+        synthesis_thread = self.synthesize_and_stream_text(question_prompt)
+        synthesis_thread.join()
+        
+        # Wait for audio to finish completely before proceeding
+        print("⏳ Waiting for question to finish playing completely...")
+        while not self.audio_queue.empty():
+            time.sleep(0.1)
+        time.sleep(2.0)  # Extra buffer to ensure audio is completely done
+        
+        # Get text input for yes/no response (unlimited time)
+        print("\n⌨️  Please type 'yes' or 'no': ", end="")
+        response = input().lower().strip()
+        has_questions = response in ['yes', 'y', 'yeah', 'yep']
+        
+        if has_questions:
+            print("✅ Student has questions - starting Q&A session")
+            
+            while True:
+                # Ask for the question with unlimited time
+                question_prompt = "What's your AMAZING question? I can't wait to hear what you're curious about!"
+                print(f"⌨️  {question_prompt}")
+                
+                # Synthesize the question prompt
+                synthesis_thread = self.synthesize_and_stream_text(question_prompt)
+                synthesis_thread.join()
+                
+                # Wait for audio to finish completely before proceeding
+                print("⏳ Waiting for question prompt to finish playing completely...")
+                while not self.audio_queue.empty():
+                    time.sleep(0.1)
+                time.sleep(2.0)  # Extra buffer to ensure audio is completely done
+                
+                # Get text input for the question (unlimited time)
+                print(f"\n⌨️  Please type your question: ", end="")
+                question = input().strip()
+                
+                if question:
+                    print(f"❓ Student question: {question}")
+                    
+                    # Add question to transcript
+                    self.add_to_transcript(
+                        f"Q&A - {current_topic}",
+                        f"Question: {question}"
+                    )
+                    
+                    # Generate answer
+                    answer = self.generate_answer_to_question(question, current_topic)
+                    print(f"🤖 Generated answer: {len(answer)} characters")
+                    
+                    # Add answer to transcript
+                    self.add_to_transcript(
+                        f"Q&A - {current_topic}",
+                        f"Answer: {answer}"
+                    )
+                    
+                    # Synthesize and speak the answer
+                    synthesis_thread = self.synthesize_and_stream_text(answer)
+                    synthesis_thread.join()
+                    
+                    # Wait for audio to finish completely before proceeding
+                    print("⏳ Waiting for answer to finish playing completely...")
+                    while not self.audio_queue.empty():
+                        time.sleep(0.1)
+                    time.sleep(2.0)  # Extra buffer to ensure audio is completely done
+                    
+                    # Ask if they have more questions
+                    more_questions_prompt = "That was such a great question! Do you have any more AMAZING questions? I love your curiosity! Please type 'yes' or 'no'."
+                    print(f"⌨️  {more_questions_prompt}")
+                    
+                    # Synthesize the follow-up question
+                    synthesis_thread = self.synthesize_and_stream_text(more_questions_prompt)
+                    synthesis_thread.join()
+                    
+                    # Wait for audio to finish completely before proceeding
+                    print("⏳ Waiting for question to finish playing completely...")
+                    while not self.audio_queue.empty():
+                        time.sleep(0.1)
+                    time.sleep(2.0)  # Extra buffer to ensure audio is completely done
+                    
+                    # Get text input for yes/no response (unlimited time)
+                    print("\n⌨️  Please type 'yes' or 'no': ", end="")
+                    more_response = input().lower().strip()
+                    has_more_questions = more_response in ['yes', 'y', 'yeah', 'yep']
+                    
+                    if not has_more_questions:
+                        print("✅ No more questions - continuing lecture")
+                        # Add Q&A session end to transcript
+                        self.add_to_transcript(
+                            f"Q&A - {current_topic}",
+                            "Q&A session completed."
+                        )
+                        break
+                    else:
+                        print("✅ Student has more questions - continuing Q&A")
+                        continue
+                else:
+                    print("⏰ No question entered - continuing lecture")
+                    break
+        else:
+            print("✅ No questions - continuing lecture")
+        
+        print(f"✅ Q&A session completed for: {current_topic}")
+        print("-" * 40)
+    
+    def generate_text_with_gemini(self, prompt):
+        """Generate text using Gemini AI with retry logic"""
+        if not self.gemini_api_key or not self.gemini_url:
+            print("⚠️  Gemini API key or URL not provided, using fallback text")
+            return self.get_fallback_text(prompt)
+        
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                url_with_key = f"{self.gemini_url}?key={self.gemini_api_key}"
+                
+                headers = {
+                    "Content-Type": "application/json"
+                }
+                
+                data = {
+                    "contents": [{
+                        "parts": [{
+                            "text": prompt
+                        }]
+                    }]
+                }
+                
+                response = requests.post(url_with_key, headers=headers, json=data, timeout=30)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    print(f"🤖 Gemini generated text: {len(generated_text)} characters")
+                    return generated_text
+                elif response.status_code == 503:
+                    print(f"⚠️  Gemini API overloaded (503), attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        print("❌ Gemini API still overloaded after retries, using fallback")
+                        return self.get_fallback_text(prompt)
+                else:
+                    print(f"❌ Gemini API error: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return self.get_fallback_text(prompt)
+                    
+            except requests.exceptions.Timeout:
+                print(f"⚠️  Gemini API timeout, attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    print("❌ Gemini API timeout after retries, using fallback")
+                    return self.get_fallback_text(prompt)
+            except Exception as e:
+                print(f"❌ Error calling Gemini API: {e}")
+                return self.get_fallback_text(prompt)
+        
+        return self.get_fallback_text(prompt)
+    
+    def get_fallback_text(self, prompt):
+        """Fallback text based on the lecture section"""
+        prompt_lower = prompt.lower()
+        
+        if "introduction" in prompt_lower:
+            return (
+                "Hey there, amazing scientists! Welcome to the coolest physics adventure ever! "
+                "Today, we're going to discover the incredible world of waves - nature's super cool way of sending energy and messages! "
+                "Waves are EVERYWHERE around us - from the music that makes you dance to the light that helps you see your favorite colors! "
+                "In this awesome lesson, we'll learn about what waves are, how they travel, "
+                "and why they make our world so incredibly amazing! "
+                "Get ready to unlock the secret superpower of understanding waves!"
+            )
+        elif "what are waves" in prompt_lower or "waves explanation" in prompt_lower:
+            return (
+                "Let me explain waves with some real-world examples. "
+                "Think about when you throw a stone into a pond. "
+                "The ripples that spread out from where the stone hit the water are waves! "
+                "These ripples carry energy from the center outward. "
+                "Another great example is sound waves. When you speak, "
+                "your vocal cords create vibrations that travel through the air as sound waves. "
+                "These waves reach our ears and we hear the sound. "
+                "Light waves work similarly - they travel from the sun to Earth, "
+                "allowing us to see everything around us. "
+                "Waves can travel through different materials like air, water, and even solid objects!"
+            )
+        elif "types of waves" in prompt_lower:
+            return (
+                "There are two main types of waves: mechanical waves and electromagnetic waves. "
+                "Mechanical waves need a medium to travel through, like sound waves in air or water waves in water. "
+                "Electromagnetic waves, like light and radio waves, can travel through empty space. "
+                "Think of it this way: you can't hear sound in space because there's no air, "
+                "but you can see light from stars because light doesn't need air to travel!"
+            )
+        elif "medium" in prompt_lower or "vacuum" in prompt_lower:
+            return (
+                "The medium is what waves travel through. Sound waves need air, water, or solid objects. "
+                "That's why you can't hear anything in space - there's no air for sound to travel through! "
+                "But light waves are different. They can travel through empty space, which is why we can see "
+                "stars that are millions of miles away. This is why astronauts need radios to talk in space, "
+                "but they can still see each other perfectly!"
+            )
+        elif "real world" in prompt_lower or "examples" in prompt_lower:
+            return (
+                "Waves are everywhere in our world! Think about the music you listen to - that's sound waves. "
+                "The colors you see are light waves of different lengths. When you throw a stone in a pond, "
+                "those ripples are water waves. Radio waves carry your favorite music to your radio. "
+                "Even earthquakes are caused by seismic waves traveling through the Earth. "
+                "Waves help us communicate, entertain, and understand our world!"
+            )
+        elif "diagram" in prompt_lower:
+            return (
+                "Wave diagrams help us understand wave properties. The highest point is called the crest, "
+                "and the lowest point is the trough. The distance between two crests is the wavelength. "
+                "The height of the wave from the middle to the crest is the amplitude. "
+                "More waves passing per second means higher frequency. "
+                "These diagrams help us visualize how waves behave and measure their properties!"
+            )
+
+        else:
+            return (
+                "Waves are fascinating phenomena that carry energy and information. "
+                "They can travel through different materials and help us understand "
+                "how sound, light, and other forms of energy move through our world. "
+                "Learning about waves helps us understand the fundamental nature of our universe."
+            )
+    
+    def clean_text_for_tts(self, text):
+        """Clean text for better TTS synthesis"""
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Remove special characters that might cause TTS issues
+        text = re.sub(r'[^\w\s\.\,\!\?\-\:\;]', '', text)
+        
+        # Ensure proper sentence endings
+        text = text.strip()
+        if not text.endswith(('.', '!', '?')):
+            text += '.'
+        
+        # Limit length to prevent memory issues
+        if len(text) > 2000:
+            text = text[:2000] + "..."
+        
+        return text
+    
+    def synthesis_worker(self, text_chunks):
+        """Worker thread for TTS synthesis"""
+        try:
+            with self.tts_lock:
+                for i, chunk in enumerate(text_chunks):
+                    # For interactive diagram, we want to continue even if audio is paused or lecture is complete
+                    if not self.audio_thread_running and not getattr(self, 'interactive_diagram_active', False):
+                        # Start audio thread if interactive diagram is active but audio thread is not running
+                        if getattr(self, 'interactive_diagram_active', False):
+                            print("🎤 Interactive diagram active but audio thread not running - starting audio thread")
+                            self.start_audio_thread()
+                        else:
+                            break
+                    
+                    try:
+                        # Clean the text chunk
+                        clean_chunk = self.clean_text_for_tts(chunk)
+                        
+                        if not clean_chunk.strip():
+                            continue
+                        
+                        print(f"🎤 Synthesizing chunk {i+1}/{len(text_chunks)}: {len(clean_chunk)} characters")
+                        
+                        # Synthesize audio with speed control
+                        if self.speaker:
+                            audio_data = self.tts.tts(clean_chunk, speaker=self.speaker, speed=self.tts_speed)
+                        else:
+                            audio_data = self.tts.tts(clean_chunk, speed=self.tts_speed)
+                        
+                        # Convert to numpy array if needed
+                        if isinstance(audio_data, list):
+                            audio_data = np.array(audio_data)
+                        
+                        # Ensure audio data is float32
+                        if audio_data.dtype != np.float32:
+                            audio_data = audio_data.astype(np.float32)
+                        
+                        # Normalize audio
+                        if np.max(np.abs(audio_data)) > 0:
+                            audio_data = audio_data / np.max(np.abs(audio_data)) * 0.8
+                        
+                        # Convert to bytes and add to queue
+                        audio_bytes = audio_data.tobytes()
+                        
+                        # Split into smaller chunks for streaming
+                        chunk_size = self.audio_chunk_size * 4  # 4 bytes per float32
+                        for j in range(0, len(audio_bytes), chunk_size):
+                            chunk_bytes = audio_bytes[j:j + chunk_size]
+                            if len(chunk_bytes) == chunk_size:  # Only add complete chunks
+                                self.audio_queue.put(chunk_bytes)
+                        
+                        print(f"✅ Chunk {i+1} synthesized and queued")
+                        
+                    except Exception as e:
+                        print(f"❌ Error synthesizing chunk {i+1}: {e}")
+                        continue
+                        
+        except Exception as e:
+            print(f"❌ Error in synthesis worker: {e}")
+    
+    def synthesize_and_stream_text(self, text):
+        """Synthesize text to speech and stream it"""
+        if not self.tts:
+            print("❌ TTS not available")
+            return None
+        
+        try:
+            # Split text into manageable chunks
+            sentences = re.split(r'[.!?]+', text)
+            text_chunks = [s.strip() for s in sentences if s.strip()]
+            
+            if not text_chunks:
+                print("❌ No text to synthesize")
+                return None
+            
+            print(f"🎤 Starting TTS synthesis for {len(text_chunks)} chunks...")
+            
+            # For interactive diagram, ensure audio is ready
+            if getattr(self, 'interactive_diagram_active', False):
+                print("🎤 Interactive diagram mode - ensuring audio is ready")
+                # Ensure audio stream is open
+                if not self.stream or not self.stream.is_active():
+                    self.open_audio_stream()
+                # Ensure audio thread is running
+                if not self.audio_thread_running:
+                    self.start_audio_thread()
+            
+            # Create synthesis thread
+            synthesis_thread = threading.Thread(
+                target=self.synthesis_worker,
+                args=(text_chunks,),
+                daemon=True
+            )
+            synthesis_thread.start()
+            
+            return synthesis_thread
+            
+        except Exception as e:
+            print(f"❌ Error starting TTS synthesis: {e}")
+            return None
+
+    
+    def load_and_display_image(self, image_filename):
+        """Load and display an image and notify frontend"""
+        try:
+            image_path = os.path.join(self.images_folder, image_filename)
+            if os.path.exists(image_path):
+                print(f"🖼️  Image loaded: {image_filename}")
+                self.current_image = image_path
+                # Notify frontend about diagram display
+                self.send_diagram_display_signal(image_filename, image_path)
+                return True
+            else:
+                print(f"⚠️  Image not found: {image_path}")
+                return False
+        except Exception as e:
+            print(f"❌ Error loading image: {e}")
+            return False
+    
+    def send_diagram_display_signal(self, image_filename, image_path):
+        """Send signal to frontend to display diagram overlay"""
+        try:
+            # This will be handled by the WebSocket or API endpoint
+            diagram_info = {
+                "type": "diagram_display",
+                "image_filename": image_filename,
+                "image_path": image_path,
+                "section": "diagram_explanation",
+                "message": "🖼️ Displaying wave diagram. Take a close look at the wave pattern and properties!"
+            }
+            print(f"📡 Sending diagram display signal: {diagram_info}")
+            # Store diagram info for frontend to retrieve
+            self.current_diagram_info = diagram_info
+        except Exception as e:
+            print(f"❌ Error sending diagram signal: {e}")
+    
+    
+    def deliver_full_lecture(self):
+        """Deliver the complete physics lecture with all sections in one flow"""
+        print("🎓 Starting complete Physics lecture on waves...")
+        print("=" * 60)
+        print(f"🔍 Debug: self.sections = {self.sections}")
+        print(f"🔍 Debug: self.lecture_running = {self.lecture_running}")
+        
+        # Initialize lecture state
+        with self.lecture_control_lock:
+            self.lecture_running = True
+            self.current_section_index = 0
+            self.lecture_start_time = datetime.now()
+            self.clear_transcript()
+            print("✅ Lecture state initialized")
+        
+        print("✅ Starting audio thread...")
+        # Start audio thread
+        self.start_audio_thread()
+        print("✅ Audio thread started")
+        
+        try:
+            # 1. Introduction
+            print("\n📚 SECTION 1: INTRODUCTION")
+            print("-" * 30)
+            self.current_lecture_section = "introduction"
+            self.current_section_index = 0
+            self.section_start_times["introduction"] = datetime.now()
+            
+            intro_prompt = """
+            Generate an exciting and super friendly introduction for a Class 7 Physics lesson about waves! 
+            The introduction should:
+            - Be 150-200 words
+            - Start with a super warm welcome like "Hey there, amazing scientists!" or "Welcome to the coolest physics adventure!"
+            - Use fun, energetic language that makes students feel excited
+            - Explain waves as "awesome energy messengers" or "nature's way of sending messages"
+            - Mention that waves are EVERYWHERE and make our world super cool
+            - Give fun examples like "the music that makes you dance", "the light that helps you see your favorite colors", "the ripples when you splash in a pool"
+            - Use exclamation marks and positive energy!
+            - Include phrases like "get ready for an amazing journey", "you're going to discover something incredible"
+            - Make students feel like they're about to unlock a secret superpower
+            - Use words like "awesome", "amazing", "incredible", "super cool"
+            - End with excitement about what they'll learn
+            - Be super encouraging and make them feel like they can do anything!
+            """
+            
+            intro_text = self.generate_text_with_gemini(intro_prompt)
+            print(f"📚 Introduction generated: {len(intro_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("introduction", intro_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(intro_text)
+            synthesis_thread.join()
+            print("✅ Introduction completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # 2. What are waves
+            print("\n📚 SECTION 2: WHAT ARE WAVES")
+            print("-" * 30)
+            self.current_lecture_section = "what_are_waves"
+            self.current_section_index = 1
+            self.section_start_times["what_are_waves"] = datetime.now()
+            
+            waves_prompt = """
+            Generate a super fun and exciting explanation of what waves are for Class 7 Physics students! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something exciting like "Okay, get ready for something AMAZING!"
+            - Define waves as "nature's super cool way of sending energy and messages"
+            - Use fun analogies like "waves are like invisible messengers running around the universe"
+            - Give super relatable examples like "the sound of your favorite song", "the light that makes rainbows", "the ripples when you throw a pebble in water"
+            - Use energetic language with exclamation marks!
+            - Include phrases like "isn't that incredible?", "how cool is that?", "you're going to love this!"
+            - Make it feel like they're discovering a secret power
+            - Use words like "awesome", "amazing", "incredible", "super cool", "mind-blowing"
+            - Connect to things they love: music, colors, swimming, playing
+            - Make them feel like they're becoming wave experts
+            - End with excitement about learning more
+            """
+            
+            waves_text = self.generate_text_with_gemini(waves_prompt)
+            print(f"📚 Waves explanation generated: {len(waves_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("what_are_waves", waves_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(waves_text)
+            synthesis_thread.join()
+            print("✅ Waves explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # Q&A for waves
+            self.handle_qa_session("what waves are")
+            time.sleep(1.0)
+            
+            # 3. Types of waves
+            print("\n📚 SECTION 3: TYPES OF WAVES")
+            print("-" * 30)
+            self.current_lecture_section = "types_of_waves"
+            self.current_section_index = 2
+            self.section_start_times["types_of_waves"] = datetime.now()
+            
+            types_prompt = """
+            Generate a super exciting explanation of different types of waves for Class 7 Physics students! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something like "Now for the REALLY cool part!"
+            - Explain mechanical waves as "waves that need a ride" (like sound needing air)
+            - Explain electromagnetic waves as "waves that are super independent" (like light traveling through space)
+            - Give fun examples: mechanical waves are like "sound waves that need air to travel", "water waves that need water", "earthquake waves that travel through the ground"
+            - Give fun examples: electromagnetic waves are like "light that can travel through space", "radio waves that bring your favorite music", "X-rays that help doctors see inside"
+            - Use phrases like "isn't that mind-blowing?", "how awesome is that?", "you're learning something incredible!"
+            - Make it feel like they're discovering secret wave powers
+            - Use energetic language with exclamation marks!
+            - Connect to things they know: music, swimming, seeing, space
+            - Make them feel like they're becoming wave scientists
+            - End with excitement about learning more
+            """
+            
+            types_text = self.generate_text_with_gemini(types_prompt)
+            print(f"📚 Types of waves explanation generated: {len(types_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("types_of_waves", types_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(types_text)
+            synthesis_thread.join()
+            print("✅ Types of waves explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # Q&A for types of waves
+            self.handle_qa_session("types of waves")
+            time.sleep(1.0)
+            
+            # 4. Medium vs vacuum
+            print("\n📚 SECTION 4: MEDIUM VS VACUUM")
+            print("-" * 30)
+            self.current_lecture_section = "medium_vs_vacuum"
+            self.current_section_index = 3
+            self.section_start_times["medium_vs_vacuum"] = datetime.now()
+            
+            medium_prompt = """
+            Generate a super exciting explanation of how waves travel through different materials for Class 7 Physics students! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something like "This is where it gets REALLY interesting!"
+            - Explain mechanical waves as "waves that need a ride" - like sound needing air to travel
+            - Explain electromagnetic waves as "waves that are super independent" - like light traveling through empty space
+            - Give the cool space example: "Imagine you're an astronaut in space - you can't hear anything because there's no air for sound to travel through!"
+            - Give the amazing light example: "But you can still see stars because light doesn't need air - it's super independent!"
+            - Use phrases like "isn't that incredible?", "how mind-blowing is that?", "you're learning something amazing!"
+            - Make it feel like they're discovering space secrets
+            - Use energetic language with exclamation marks!
+            - Connect to space movies, astronauts, stars, the sun
+            - Make them feel like they're becoming space scientists
+            - End with excitement about real-world examples
+            """
+            
+            medium_text = self.generate_text_with_gemini(medium_prompt)
+            print(f"📚 Medium vs vacuum explanation generated: {len(medium_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("medium_vs_vacuum", medium_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(medium_text)
+            synthesis_thread.join()
+            print("✅ Medium vs vacuum explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # Q&A for medium vs vacuum
+            self.handle_qa_session("how waves travel through different materials")
+            time.sleep(1.0)
+            
+            # 5. Real-world examples
+            print("\n📚 SECTION 5: REAL-WORLD EXAMPLES")
+            print("-" * 30)
+            self.current_lecture_section = "real_world_examples"
+            self.current_section_index = 4
+            self.section_start_times["real_world_examples"] = datetime.now()
+            
+            examples_prompt = """
+            Generate super exciting real-world examples of waves for Class 7 Physics students! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something like "Now let's discover waves in YOUR world!"
+            - Give fun examples they can relate to: "The music that makes you dance", "The light that helps you see your favorite colors", "The ripples when you splash in a pool"
+            - Include technology they love: "The radio waves that bring your favorite songs", "The light waves that make your phone screen work", "The sound waves when you talk to friends"
+            - Include nature they experience: "The ocean waves at the beach", "The sound of birds singing", "The light from the sun that helps plants grow"
+            - Use phrases like "isn't that amazing?", "how cool is that?", "you're surrounded by waves everywhere!"
+            - Make it feel like they're discovering a secret world
+            - Use energetic language with exclamation marks!
+            - Connect to things they love: music, phones, beaches, nature
+            - Make them feel like they're becoming wave detectives
+            - End with excitement about learning to read wave diagrams
+            """
+            
+            examples_text = self.generate_text_with_gemini(examples_prompt)
+            print(f"📚 Real-world examples generated: {len(examples_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("real_world_examples", examples_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(examples_text)
+            synthesis_thread.join()
+            print("✅ Real-world examples completed!")
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Q&A for real-world examples
+            self.handle_qa_session("real-world examples of waves")
+            time.sleep(1.0)
+            
+            # 6. Diagram explanation
+            print("\n📚 SECTION 6: DIAGRAM EXPLANATION")
+            print("-" * 30)
+            self.current_lecture_section = "diagram_explanation"
+            self.current_section_index = 5
+            self.section_start_times["diagram_explanation"] = datetime.now()
+            
+            # Try to load a wave diagram image
+            self.load_and_display_image("image1.png")
+            
+            diagram_prompt = """
+            Generate a super exciting explanation of wave diagrams for Class 7 Physics students! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something like "Now you're going to learn to read the secret language of waves!"
+            - Explain wave diagrams as "pictures that show us how waves dance and move"
+            - Describe wave properties in fun ways: "The crest is like the top of a mountain", "The trough is like the bottom of a valley", "The wavelength is like the distance between two mountains"
+            - Use fun analogies: "Think of it like reading a music sheet for waves", "It's like having a map of how energy travels"
+            - Use phrases like "isn't this incredible?", "you're learning to read nature's secret code!", "how amazing is that?"
+            - Make it feel like they're becoming wave scientists
+            - Use energetic language with exclamation marks!
+            - Connect to things they know: mountains, valleys, music, maps
+            - Make them feel like they're unlocking a superpower
+            - End with excitement about understanding wave measurements
+            """
+            
+            diagram_text = self.generate_text_with_gemini(diagram_prompt)
+            print(f"📚 Diagram explanation generated: {len(diagram_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("diagram_explanation", diagram_text)
+            # Add a short ending lecture message after the diagram explanation
+            ending_message = "Great job exploring wave diagrams! Keep practicing and you'll master wave science in no time!"
+            self.add_to_transcript("lecture_ending", ending_message)
+            
+            synthesis_thread = self.synthesize_and_stream_text(diagram_text)
+            synthesis_thread.join()
+            print("✅ Diagram explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Q&A for diagram explanation
+            self.handle_qa_session("wave diagrams")
+            time.sleep(1.0)
+            
+            # 7. Ending Lecture Slide
+            print("\n📚 SECTION 7: ENDING LECTURE")
+            print("-" * 30)
+            self.current_lecture_section = "ending_lecture"
+            self.current_section_index = 6
+            self.section_start_times["ending_lecture"] = datetime.now()
+
+            ending_prompt = """
+            Write a 10-20 line ending message for a Class 7 Physics lesson on waves. The message should:
+            - Congratulate the student for completing the lesson
+            - Summarize the key points about waves (energy, types, properties, real-world examples, diagrams)
+            - Encourage curiosity and further exploration
+            - Use energetic, positive, and motivating language
+            - Make the student feel proud and excited to learn more science
+            - End with a call to action, like "Keep exploring!" or "You're a wave wizard now!"
+            - Be friendly, concise, and fun
+            """
+            ending_text = self.generate_text_with_gemini(ending_prompt)
+            print(f"📚 Ending lecture message generated: {len(ending_text)} characters")
+            self.add_to_transcript("ending_lecture", ending_text)
+            synthesis_thread = self.synthesize_and_stream_text(ending_text)
+            synthesis_thread.join()
+            print("✅ Ending lecture completed!")
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+
+            print("\n🎓 Complete Physics lecture delivered successfully!")
+            print("=" * 60)
+            
+            # Clear any remaining audio in queue for clean finish
+            print("🧹 Clearing any remaining audio...")
+            self.clear_audio_queue()
+            time.sleep(1.0)  # Brief wait to ensure clean finish
+            
+        except KeyboardInterrupt:
+            print("\n⏹️  Lecture interrupted by user")
+        except Exception as e:
+            print(f"\n❌ Error during lecture: {e}")
+        finally:
+            # Stop audio thread and update lecture state
+            self.stop_audio_thread()
+            with self.lecture_control_lock:
+                # Ensure all sections are properly saved before marking as completed
+                if self.current_section_index >= len(self.sections) - 1:
+                    print("🎉 Lecture completed successfully - ensuring all sections are saved!")
+                    # Make sure the final sections are in the transcript
+                    if self.transcript:
+                        final_sections = [entry["section"] for entry in self.transcript]
+                        if "diagram_explanation" not in final_sections:
+                            print("⚠️  Diagram explanation not found in transcript, adding fallback")
+                            self.add_to_transcript("diagram_explanation", "Wave diagrams help us understand wave properties. The highest point is called the crest, and the lowest point is the trough. The distance between two crests is the wavelength. The height of the wave from the middle to the crest is the amplitude. More waves passing per second means higher frequency. These diagrams help us visualize how waves behave and measure their properties!")
+
+                
+                self.lecture_running = False
+                # Don't increment beyond sections length to avoid index errors
+    
+    def close(self):
+        """Clean up resources"""
+        print("🧹 Cleaning up resources...")
+        self.stop_audio_thread()
+        self.close_audio_stream()
+        if self.p:
+            self.p.terminate()
+        print("✅ Cleanup completed")
+    
+    def get_lecture_status(self):
+        """Get current lecture status"""
+        with self.lecture_control_lock:
+            # Fixed progress calculation - add 1 to current_section_index so final section shows 100%
+            progress_percentage = ((self.current_section_index + 1) / len(self.sections)) * 100 if self.sections else 0
+            
+            status = {
+                "lecture_running": self.lecture_running,
+                "lecture_paused": self.lecture_paused,
+                "audio_paused": self.is_audio_paused(),
+                "current_section": self.current_lecture_section,
+                "current_section_index": self.current_section_index,
+                "total_sections": len(self.sections),
+                "progress_percentage": progress_percentage
+            }
+            
+            # Debug logging for progress calculation
+            print(f"📊 Progress Debug: section {self.current_section_index}/{len(self.sections)} = {progress_percentage:.1f}%")
+            
+            return status
+    
+    def pause_lecture(self):
+        """Pause the lecture"""
+        with self.lecture_control_lock:
+            print(f"🔍 Pause check: lecture_running={self.lecture_running}, lecture_paused={self.lecture_paused}")
+            if self.lecture_running and not self.lecture_paused:
+                self.lecture_paused = True
+                # Also pause the audio
+                self.pause_audio()
+                print("⏸️  Lecture paused")
+                return True
+            else:
+                print(f"❌ Cannot pause: lecture_running={self.lecture_running}, lecture_paused={self.lecture_paused}")
+                return False
+    
+    def resume_lecture(self):
+        """Resume the lecture from where it was paused"""
+        with self.lecture_control_lock:
+            if self.lecture_running and self.lecture_paused:
+                self.lecture_paused = False
+                # Also resume the audio
+                self.resume_audio()
+                print("▶️  Lecture resumed")
+                return True
+            return False
+    
+    def is_paused(self):
+        """Check if lecture is paused"""
+        with self.lecture_control_lock:
+            return self.lecture_paused
+    
+    def wait_if_paused(self):
+        """Wait while lecture is paused"""
+        while self.is_paused():
+            time.sleep(0.5)  # Check every 500ms
+            if not self.lecture_running:
+                return False  # Lecture was stopped while paused
+        return True  # Lecture resumed or not paused
+    
+    def pause_audio(self):
+        """Pause audio playback"""
+        with self.audio_pause_lock:
+            self.audio_paused = True
+            print("🔇 Audio paused")
+    
+    def resume_audio(self):
+        """Resume audio playback"""
+        with self.audio_pause_lock:
+            self.audio_paused = False
+            print("🔊 Audio resumed")
+    
+    def is_audio_paused(self):
+        """Check if audio is paused"""
+        with self.audio_pause_lock:
+            return self.audio_paused
+    
+    def clear_audio_queue(self):
+        """Clear the audio queue for immediate playback"""
+        try:
+            # Clear all items in the queue
+            while not self.audio_queue.empty():
+                try:
+                    self.audio_queue.get_nowait()
+                    self.audio_queue.task_done()
+                except queue.Empty:
+                    break
+            print("🎵 Audio queue cleared for immediate playback")
+        except Exception as e:
+            print(f"❌ Error clearing audio queue: {e}")
+    
+    def skip_to_section(self, section_index):
+        """Skip to a specific section"""
+        with self.lecture_control_lock:
+            if 0 <= section_index < len(self.sections):
+                self.current_section_index = section_index
+                self.current_lecture_section = self.sections[section_index]
+                print(f"⏭️  Skipped to section {section_index}: {self.sections[section_index]}")
+                return {"status": "success", "message": f"Skipped to section {section_index}"}
+            else:
+                return {"status": "error", "message": "Invalid section index"}
+    
+    # NEW: Transcript functionality
+    def add_to_transcript(self, section, text, timestamp=None):
+        """Add text to transcript with timestamp"""
+        if timestamp is None:
+            timestamp = datetime.now()
+        
+        with self.transcript_lock:
+            transcript_entry = {
+                "section": section,
+                "text": text,
+                "timestamp": timestamp.isoformat(),
+                "section_index": self.sections.index(section) if section in self.sections else -1
+            }
+            self.transcript.append(transcript_entry)
+            print(f"📝 Added to transcript: {section} ({len(text)} chars)")
+            print(f"📊 Current transcript sections: {[entry['section'] for entry in self.transcript]}")
+    
+    def get_transcript(self):
+        """Get the complete transcript"""
+        with self.transcript_lock:
+            return {
+                "lecture_start_time": self.lecture_start_time.isoformat() if self.lecture_start_time else None,
+                "sections": self.sections,
+                "transcript": self.transcript.copy(),
+                "total_entries": len(self.transcript)
+            }
+    
+    def export_transcript(self, format="json"):
+        """Export transcript in specified format"""
+        transcript_data = self.get_transcript()
+        
+        if format == "json":
+            return transcript_data
+        elif format == "text":
+            text_output = f"Physics Lecture Transcript\n"
+            text_output += f"Started: {transcript_data['lecture_start_time']}\n"
+            text_output += f"{'='*50}\n\n"
+            
+            for entry in transcript_data['transcript']:
+                text_output += f"Section: {entry['section']}\n"
+                text_output += f"Time: {entry['timestamp']}\n"
+                text_output += f"{entry['text']}\n\n"
+            
+            return text_output
+        else:
+            return {"error": "Unsupported format"}
+    
+    def clear_transcript(self):
+        """Clear the transcript"""
+        with self.transcript_lock:
+            self.transcript.clear()
+            self.lecture_start_time = None
+            self.section_start_times.clear()
+            print("🗑️  Transcript cleared")
+    
+    # NEW: Flashcard Generation (Simplified)
+    def generate_flashcards(self, num_cards=10):
+        """Generate flashcards based on the lecture content"""
+        if not self.transcript:
+            return {
+                "error": "No lecture content available for flashcards",
+                "flashcards": []
+            }
+        
+        try:
+            # Combine all lecture content
+            full_lecture_content = ""
+            for entry in self.transcript:
+                full_lecture_content += f"\n{entry['section']}: {entry['text']}\n"
+            
+            # Generate flashcards using Gemini
+            flashcard_prompt = f"""
+            Based on this Class 7 Physics lecture about waves, create {num_cards} educational flashcards for revision.
+            
+            Lecture Content:
+            {full_lecture_content}
+            
+            Create flashcards that:
+            - Cover the most important concepts from the lecture
+            - Are suitable for 12-13 year old students
+            - Have clear, concise questions and answers
+            - Include definitions, examples, and key concepts
+            - Mix different types of questions (definition, example, explanation)
+            
+            Format each flashcard as:
+            CARD [number]:
+            Q: [Question]
+            A: [Answer]
+            
+            Make sure to cover:
+            - What are waves
+            - Types of waves (mechanical vs electromagnetic)
+            - Medium vs vacuum concepts
+            - Real-world examples
+            - Wave properties
+            - Important definitions
+            
+            Create exactly {num_cards} flashcards.
+            """
+            
+            flashcards_text = self.generate_text_with_gemini(flashcard_prompt)
+            
+            # Parse flashcards from the response
+            flashcards = []
+            card_sections = flashcards_text.split("CARD")
+            
+            for i, section in enumerate(card_sections[1:], 1):  # Skip first empty section
+                lines = section.strip().split('\n')
+                question = ""
+                answer = ""
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('Q:'):
+                        question = line[2:].strip()
+                    elif line.startswith('A:'):
+                        answer = line[2:].strip()
+                    elif question and not answer and not line.startswith(('Q:', 'A:', str(i+1))):
+                        # Multi-line question
+                        question += " " + line
+                    elif answer and not line.startswith(('Q:', 'A:', str(i+1))):
+                        # Multi-line answer
+                        answer += " " + line
+                
+                if question and answer:
+                    flashcard = {
+                        "id": i,
+                        "question": question.strip(),
+                        "answer": answer.strip(),
+                        "topic": self.categorize_flashcard_topic(question),
+                        "difficulty": "beginner",
+                        "subject": "Physics",
+                        "class_level": "Class 7"
+                    }
+                    flashcards.append(flashcard)
+            
+            # If we don't have enough flashcards, generate some fallback ones
+            while len(flashcards) < min(num_cards, 8):
+                fallback_cards = self.generate_fallback_flashcards()
+                for card in fallback_cards:
+                    if len(flashcards) < num_cards:
+                        card["id"] = len(flashcards) + 1
+                        flashcards.append(card)
+            
+            flashcard_set = {
+                "title": "Physics Waves - Revision Flashcards",
+                "class_level": "Class 7",
+                "subject": "Physics",
+                "topic": "Introduction to Waves",
+                "total_cards": len(flashcards),
+                "flashcards": flashcards[:num_cards],  # Limit to requested number
+                "generated_at": datetime.now().isoformat(),
+                "difficulty_level": "beginner"
+            }
+            
+            print(f"🎴 Generated {len(flashcards)} flashcards successfully")
+            return flashcard_set
+            
+        except Exception as e:
+            print(f"❌ Error generating flashcards: {e}")
+            return {
+                "error": f"Failed to generate flashcards: {str(e)}",
+                "flashcards": []
+            }
+    
+    def generate_flashcards(self, num_cards=10):
+        """Generate flashcards based on the lecture content"""
+        if not self.transcript:
+            return {
+                "error": "No lecture content available for flashcards",
+                "flashcards": []
+            }
+        
+        try:
+            # Combine all lecture content
+            full_lecture_content = ""
+            for entry in self.transcript:
+                full_lecture_content += f"\n{entry['section']}: {entry['text']}\n"
+            
+            # Generate flashcards using Gemini
+            flashcard_prompt = f"""
+            Based on this Class 7 Physics lecture about waves, create {num_cards} educational flashcards for revision.
+            
+            Lecture Content:
+            {full_lecture_content}
+            
+            Create flashcards that:
+            - Cover the most important concepts from the lecture
+            - Are suitable for 12-13 year old students
+            - Have clear, concise questions and answers
+            - Include definitions, examples, and key concepts
+            - Mix different types of questions (definition, example, explanation)
+            
+            Format each flashcard as:
+            CARD [number]:
+            Q: [Question]
+            A: [Answer]
+            
+            Make sure to cover:
+            - What are waves
+            - Types of waves (mechanical vs electromagnetic)
+            - Medium vs vacuum concepts
+            - Real-world examples
+            - Wave properties
+            - Important definitions
+            
+            Create exactly {num_cards} flashcards.
+            """
+            
+            flashcards_text = self.generate_text_with_gemini(flashcard_prompt)
+            
+            # Parse flashcards from the response
+            flashcards = []
+            card_sections = flashcards_text.split("CARD")
+            
+            for i, section in enumerate(card_sections[1:], 1):  # Skip first empty section
+                lines = section.strip().split('\n')
+                question = ""
+                answer = ""
+                
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith('Q:'):
+                        question = line[2:].strip()
+                    elif line.startswith('A:'):
+                        answer = line[2:].strip()
+                    elif question and not answer and not line.startswith(('Q:', 'A:', str(i+1))):
+                        # Multi-line question
+                        question += " " + line
+                    elif answer and not line.startswith(('Q:', 'A:', str(i+1))):
+                        # Multi-line answer
+                        answer += " " + line
+                
+                if question and answer:
+                    flashcard = {
+                        "id": i,
+                        "question": question.strip(),
+                        "answer": answer.strip(),
+                        "topic": self.categorize_flashcard_topic(question),
+                        "difficulty": "beginner",
+                        "subject": "Physics",
+                        "class_level": "Class 7"
+                    }
+                    flashcards.append(flashcard)
+            
+            # If we don't have enough flashcards, generate some fallback ones
+            while len(flashcards) < min(num_cards, 8):
+                fallback_cards = self.generate_fallback_flashcards()
+                for card in fallback_cards:
+                    if len(flashcards) < num_cards:
+                        card["id"] = len(flashcards) + 1
+                        flashcards.append(card)
+            
+            flashcard_set = {
+                "title": "Physics Waves - Revision Flashcards",
+                "class_level": "Class 7",
+                "subject": "Physics",
+                "topic": "Introduction to Waves",
+                "total_cards": len(flashcards),
+                "flashcards": flashcards[:num_cards],  # Limit to requested number
+                "generated_at": datetime.now().isoformat(),
+                "difficulty_level": "beginner"
+            }
+            
+            print(f"🎴 Generated {len(flashcards)} flashcards successfully")
+            return flashcard_set
+            
+        except Exception as e:
+            print(f"❌ Error generating flashcards: {e}")
+            return {
+                "error": f"Failed to generate flashcards: {str(e)}",
+                "flashcards": []
+            }
+    
+    def categorize_flashcard_topic(self, question):
+        """Categorize flashcard based on question content"""
+        question_lower = question.lower()
+        
+        if any(word in question_lower for word in ['definition', 'what is', 'what are']):
+            return "definitions"
+        elif any(word in question_lower for word in ['example', 'real world', 'everyday']):
+            return "examples"
+        elif any(word in question_lower for word in ['mechanical', 'electromagnetic', 'types']):
+            return "wave_types"
+        elif any(word in question_lower for word in ['medium', 'vacuum', 'travel']):
+            return "wave_travel"
+        elif any(word in question_lower for word in ['property', 'amplitude', 'frequency']):
+            return "wave_properties"
+        else:
+            return "general"
+    
+    def generate_fallback_flashcards(self):
+        """Generate fallback flashcards if AI generation fails"""
+        return [
+            {
+                "question": "What is a wave?",
+                "answer": "A wave is a disturbance that carries energy from one place to another without carrying matter.",
+                "topic": "definitions"
+            },
+            {
+                "question": "Name two types of waves based on how they travel.",
+                "answer": "Mechanical waves (need a medium) and electromagnetic waves (can travel through vacuum).",
+                "topic": "wave_types"
+            },
+            {
+                "question": "Give an example of a mechanical wave.",
+                "answer": "Sound waves, water waves, or earthquake waves (any wave that needs a medium to travel).",
+                "topic": "examples"
+            },
+            {
+                "question": "Can sound travel in space? Why or why not?",
+                "answer": "No, sound cannot travel in space because it is a mechanical wave and needs a medium like air to travel.",
+                "topic": "wave_travel"
+            },
+            {
+                "question": "Give an example of an electromagnetic wave.",
+                "answer": "Light waves, radio waves, X-rays, or microwaves (any wave that can travel through vacuum).",
+                "topic": "examples"
+            },
+            {
+                "question": "How does light from the sun reach Earth?",
+                "answer": "Light travels as electromagnetic waves through the vacuum of space to reach Earth.",
+                "topic": "wave_travel"
+            },
+            {
+                "question": "What happens when you throw a stone into water?",
+                "answer": "It creates ripples (water waves) that carry energy outward from where the stone hit the water.",
+                "topic": "examples"
+            },
+            {
+                "question": "Why can't astronauts hear each other speak in space?",
+                "answer": "Because sound waves need air (a medium) to travel, and there is no air in space.",
+                "topic": "wave_travel"
+            }
+        ]
+    
+    def generate_quiz(self, num_questions=10):
+        """Generate an AI-powered quiz with multiple-choice questions and explanations."""
+        if not self.transcript:
+            return {
+                "error": "No lecture content available for quiz",
+                "quiz": []
+            }
+        try:
+            # Combine all lecture content
+            full_lecture_content = ""
+            for entry in self.transcript:
+                full_lecture_content += f"\n{entry['section']}: {entry['text']}\n"
+
+            # Prompt for Gemini
+            quiz_prompt = f"""
+            Based on this Class 7 Physics lecture about waves, create a quiz with {num_questions} multiple-choice questions.
+
+            Requirements:
+            - Each question should have 4 options (A, B, C, D).
+            - The quiz should start easy and get harder (Q1 easiest, Q{num_questions} hardest).
+            - For each question, provide:
+                * The question text
+                * Four options (A, B, C, D)
+                * The correct option (A/B/C/D)
+                * An explanation for why the correct answer is right
+                * An explanation for why each incorrect option is wrong
+            - Explanations should be clear and suitable for a 12-13 year old.
+            - Do NOT repeat the question in the explanations.
+            - Use this format for each question:
+
+            QUESTION [number]:
+            Q: [Question text]
+            A: [Option A]
+            B: [Option B]
+            C: [Option C]
+            D: [Option D]
+            ANSWER: [A/B/C/D]
+            EXPLAIN_CORRECT: [Why the correct answer is right]
+            EXPLAIN_A: [Why A is right or wrong]
+            EXPLAIN_B: [Why B is right or wrong]
+            EXPLAIN_C: [Why C is right or wrong]
+            EXPLAIN_D: [Why D is right or wrong]
+
+            Lecture Content:
+            {full_lecture_content}
+
+            Create exactly {num_questions} questions.
+            """
+
+            quiz_text = self.generate_text_with_gemini(quiz_prompt)
+
+            # Parse quiz
+            quiz = []
+            question_blocks = quiz_text.split("QUESTION")
+            for i, block in enumerate(question_blocks[1:], 1):
+                lines = block.strip().split('\n')
+                q, opts, ans, explain_correct = '', {}, '', ''
+                explanations = {}
+                for line in lines:
+                    if line.startswith('Q:'):
+                        q = line[2:].strip()
+                    elif line.startswith('A:'):
+                        opts['A'] = line[2:].strip()
+                    elif line.startswith('B:'):
+                        opts['B'] = line[2:].strip()
+                    elif line.startswith('C:'):
+                        opts['C'] = line[2:].strip()
+                    elif line.startswith('D:'):
+                        opts['D'] = line[2:].strip()
+                    elif line.startswith('ANSWER:'):
+                        ans = line.split(':',1)[1].strip()
+                    elif line.startswith('EXPLAIN_CORRECT:'):
+                        explain_correct = line.split(':',1)[1].strip()
+                    elif line.startswith('EXPLAIN_A:'):
+                        explanations['A'] = line.split(':',1)[1].strip()
+                    elif line.startswith('EXPLAIN_B:'):
+                        explanations['B'] = line.split(':',1)[1].strip()
+                    elif line.startswith('EXPLAIN_C:'):
+                        explanations['C'] = line.split(':',1)[1].strip()
+                    elif line.startswith('EXPLAIN_D:'):
+                        explanations['D'] = line.split(':',1)[1].strip()
+                if q and opts and ans:
+                    quiz.append({
+                        "id": i,
+                        "question": q,
+                        "options": [opts.get('A',''), opts.get('B',''), opts.get('C',''), opts.get('D','')],
+                        "option_labels": ['A','B','C','D'],
+                        "correct_option": ans,
+                        "explanations": explanations,
+                        "explain_correct": explain_correct
+                    })
+            return {
+                "title": "Physics Waves - AI Quiz",
+                "class_level": "Class 7",
+                "subject": "Physics",
+                "topic": "Introduction to Waves",
+                "total_questions": len(quiz),
+                "quiz": quiz[:num_questions],
+                "generated_at": datetime.now().isoformat()
+            }
+        except Exception as e:
+            print(f"❌ Error generating quiz: {e}")
+            return {
+                "error": f"Failed to generate quiz: {str(e)}",
+                "quiz": []
+            }
+
+    def generate_qa_transcript(self):
+        """Generate a transcript of Q&A interactions"""
+        try:
+            qa_transcript = []
+            
+            # Get all Q&A interactions from the transcript
+            for entry in self.transcript:
+                if "Q&A" in entry.get("section", ""):
+                    qa_transcript.append({
+                        "section": entry["section"],
+                        "text": entry["text"],
+                        "timestamp": entry["timestamp"],
+                        "section_index": entry["section_index"],
+                        "type": "qa"
+                    })
+            
+            return {
+                "status": "success",
+                "data": {
+                    "qa_transcript": qa_transcript,
+                    "total_entries": len(qa_transcript)
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ Error generating Q&A transcript: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to generate Q&A transcript: {str(e)}",
+                "data": {
+                    "qa_transcript": [],
+                    "total_entries": 0
+                }
+            }
+
+
+
+def main():
+    """Main function to run the physics lecture"""
+    # You can set your Gemini API credentials here
+    GEMINI_API_KEY = "AIzaSyCgPs-85H5nWxxuJoC8aCs4EwfZUjBTsxQ"
+    GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    print("🎓 Physics Lecture Streaming System")
+    print("=" * 50)
+    
+    # Create lecture streamer
+    lecture_streamer = PhysicsLectureStreamer(
+        gemini_api_key=GEMINI_API_KEY,
+        gemini_url=GEMINI_URL
+    )
+    
+    # Use original recommended voice (no options needed)
+    print("\n✅ Using original recommended voice")
+    
+    # Q&A sessions always enabled
+    lecture_streamer.enable_qa()
+    print("✅ Q&A sessions enabled (text input only)")
+    
+    try:
+        # Deliver the complete lecture
+        lecture_streamer.deliver_full_lecture()
+        
+    except KeyboardInterrupt:
+        print("\n⏹️  Lecture stopped by user")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+    finally:
+        lecture_streamer.close()
+
+# Flask App Integration
+try:
+    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, APIRouter, Depends, status
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.responses import JSONResponse
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from pydantic import BaseModel
+    import uvicorn
+    import threading
+    import time
+    import queue
+    import json
+    from typing import List
+    from datetime import datetime, timedelta
+    import jwt
+    from auth import get_current_user_token, TokenData, get_current_user_data
+    from config import supabase, SECRET_KEY, ALGORITHM
+    
+    # Create router for FastAPI
+    router = APIRouter(prefix="/api/lectures/class7/science/physics/waves/level1", tags=["physics-lecture"])
+    
+    # Global variables for FastAPI app
+    app = FastAPI(
+        title="Physics Lecture Streaming API",
+        description="API for streaming physics lectures with real-time Q&A",
+        version="1.0.0"
+    )
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Include the router
+    app.include_router(router)
+    
+    # WebSocket connection manager
+    class ConnectionManager:
+        def __init__(self):
+            self.active_connections: List[WebSocket] = []
+        
+        async def connect(self, websocket: WebSocket):
+            await websocket.accept()
+            self.active_connections.append(websocket)
+            print(f"Client connected. Total connections: {len(self.active_connections)}")
+        
+        def disconnect(self, websocket: WebSocket):
+            self.active_connections.remove(websocket)
+            print(f"Client disconnected. Total connections: {len(self.active_connections)}")
+        
+        async def send_personal_message(self, message: str, websocket: WebSocket):
+            await websocket.send_text(message)
+        
+        async def broadcast(self, message: str):
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(message)
+                except:
+                    # Remove dead connections
+                    self.active_connections.remove(connection)
+    
+    manager = ConnectionManager()
+    
+    # Global variable to store the lecture streamer instance
+    lecture_streamer = None
+    lecture_thread = None
+    is_lecture_running = False
+    
+    # Queue for Q&A responses from frontend
+    qa_response_queue = queue.Queue()
+    
+    # Pydantic models for request/response
+    class LectureRequest(BaseModel):
+        gemini_api_key: str = "AIzaSyCgPs-85H5nWxxuJoC8aCs4EwfZUjBTsxQ"
+        gemini_url: str = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    class LectureResponse(BaseModel):
+        status: str
+        message: str
+        lecture_status: str = None
+    
+    @router.get("/")
+    async def home():
+        """Home endpoint"""
+        return {
+            "message": "Physics Lecture Streaming API with Revision Tools",
+            "endpoints": {
+                "/start-lecture": "POST - Start the physics lecture",
+                "/stop-lecture": "POST - Stop the running lecture",
+                "/lecture-status": "GET - Get detailed lecture status and progress",
+                "/skip-to-section": "POST - Skip to a specific section",
+                "/transcript": "GET - Get the complete lecture transcript",
+                "/export-transcript": "GET - Export transcript in JSON or text format",
+                "/clear-transcript": "POST - Clear the lecture transcript",
+                "/flashcards": "GET - Generate flashcards (default 10, max 20)",
+                "/change-voice": "POST - Change TTS voice (male/female)",
+                "/enable-qa": "POST - Enable Q&A sessions",
+                "/disable-qa": "POST - Disable Q&A sessions",
+                "/docs": "GET - API documentation (Swagger UI)",
+                "/redoc": "GET - Alternative API documentation",
+                "/ws": "WebSocket endpoint for real-time communication",
+                "/quiz": "GET - Generate AI-powered quiz",
+                "/qa-transcript": "GET - Get Q&A transcript"
+            },
+            "flashcard_features": {
+                "ai_generated": "Intelligent flashcards based on actual lecture content",
+                "interactive_ui": "Beautiful flip animations and navigation",
+                "adaptive_content": "Questions and answers tailored to Class 7 students"
+            }
+        }
+    
+    @router.get("/status")
+    async def get_lecture_status():
+        """Get current lecture status"""
+        return {
+            "status": "success",
+            "data": {
+                "is_running": is_lecture_running,
+                "has_streamer": lecture_streamer is not None
+            }
+        }
+    
+    @router.post("/stop-lecture")
+    async def stop_lecture():
+        """Stop the physics lecture"""
+        global lecture_streamer, is_lecture_running
+        
+        print(f"🔍 Stop lecture request received. Current status: is_lecture_running={is_lecture_running}")
+        
+        if not is_lecture_running:
+            print("❌ No lecture is currently running, returning 400 error")
+            raise HTTPException(status_code=400, detail="No lecture is currently running")
+        
+        try:
+            print("✅ Stopping lecture...")
+            is_lecture_running = False
+            if lecture_streamer:
+                lecture_streamer.close()
+                # DO NOT set lecture_streamer = None - keep it for quiz/flashcard generation
+                print("✅ Lecture streamer closed but kept for revision tools")
+            
+            print("✅ Lecture stopped successfully")
+            return {
+                "status": "success",
+                "message": "Physics lecture stopped successfully"
+            }
+            
+        except Exception as e:
+            print(f"❌ Error stopping lecture: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to stop lecture: {str(e)}")
+
+    @router.post("/reset-lecture")
+    async def reset_lecture():
+        """Force reset lecture state (for debugging)"""
+        global lecture_streamer, is_lecture_running, lecture_thread
+        
+        print("🔄 Force resetting lecture state...")
+        
+        # Stop any running lecture
+        is_lecture_running = False
+        if lecture_streamer:
+            lecture_streamer.close()
+            lecture_streamer = None
+            print("✅ Lecture streamer closed")
+        
+        # Reset thread
+        lecture_thread = None
+        
+        print("✅ Lecture state reset successfully")
+        return {
+            "status": "success",
+            "message": "Lecture state reset successfully"
+        }
+    
+    @router.post("/start-lecture", response_model=LectureResponse)
+    async def start_lecture(request: LectureRequest):
+        """Start the physics lecture"""
+        global lecture_streamer, lecture_thread, is_lecture_running
+        
+        print(f"🔍 Start lecture request received. Current status: is_lecture_running={is_lecture_running}")
+        print(f"📝 Request data: gemini_api_key={request.gemini_api_key[:20]}..., gemini_url={request.gemini_url}")
+        
+        if is_lecture_running:
+            print("❌ Lecture is already running, returning 400 error")
+            raise HTTPException(status_code=400, detail="Lecture is already running")
+        
+        try:
+            print("✅ Creating new PhysicsLectureStreamer...")
+            # Create lecture streamer
+            lecture_streamer = PhysicsLectureStreamer(
+                gemini_api_key=request.gemini_api_key,
+                gemini_url=request.gemini_url
+            )
+            
+            print("✅ Lecture streamer created successfully")
+            
+            # Enable Q&A sessions
+            lecture_streamer.enable_qa()
+            print("✅ Q&A sessions enabled")
+            
+            # Start lecture in a separate thread
+            is_lecture_running = True
+            print("✅ Setting is_lecture_running to True")
+            
+            lecture_thread = threading.Thread(target=run_lecture, daemon=True)
+            print("✅ Lecture thread created")
+            
+            lecture_thread.start()
+            print("✅ Lecture thread started")
+            
+            print("✅ Lecture started successfully")
+            return LectureResponse(
+                status="success",
+                message="Physics lecture started successfully",
+                lecture_status="running"
+            )
+            
+        except Exception as e:
+            print(f"❌ Error starting lecture: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Failed to start lecture: {str(e)}")
+    
+    @router.post("/change-voice")
+    async def change_voice(request: dict):
+        """Change voice type"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            voice_type = request.get("voice_type", "female")
+            if voice_type.lower() == "female":
+                success = lecture_streamer.change_voice_to_female()
+            elif voice_type.lower() == "male":
+                success = lecture_streamer.change_voice_to_male()
+            else:
+                raise HTTPException(status_code=400, detail="Voice type must be 'female' or 'male'")
+            
+            return {
+                "status": "success",
+                "message": f"Voice changed to {voice_type}",
+                "data": {
+                    "voice_type": voice_type,
+                    "success": success
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error changing voice: {str(e)}")
+    
+    @router.post("/enable-qa")
+    async def enable_qa():
+        """Enable Q&A sessions"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            lecture_streamer.enable_qa()
+            
+            return {
+                "status": "success",
+                "message": "Q&A sessions enabled",
+                "data": {
+                    "qa_enabled": True
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error enabling Q&A: {str(e)}")
+    
+    @router.post("/disable-qa")
+    async def disable_qa():
+        """Disable Q&A sessions"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            lecture_streamer.disable_qa()
+            
+            return {
+                "status": "success",
+                "message": "Q&A sessions disabled",
+                "data": {
+                    "qa_enabled": False
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error disabling Q&A: {str(e)}")
+    
+    @router.post("/pause-lecture")
+    async def pause_lecture():
+        """Pause the physics lecture"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            success = lecture_streamer.pause_lecture()
+            if success:
+                return {
+                    "status": "success",
+                    "message": "Lecture paused successfully"
+                }
+            else:
+                raise HTTPException(status_code=400, detail="Cannot pause lecture - not running or already paused")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error pausing lecture: {str(e)}")
+    
+    @router.post("/resume-lecture")
+    async def resume_lecture():
+        """Resume the physics lecture from where it was paused"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            success = lecture_streamer.resume_lecture()
+            if success:
+                return {
+                    "status": "success",
+                    "message": "Lecture resumed successfully"
+                }
+            else:
+                raise HTTPException(status_code=400, detail="Cannot resume lecture - not running or not paused")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error resuming lecture: {str(e)}")
+    
+    @router.get("/lecture-status")
+    async def get_detailed_lecture_status():
+        """Get detailed lecture status and progress"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            return {
+                "status": "success",
+                "data": {
+                    "lecture_running": False,
+                    "lecture_paused": False,
+                    "audio_paused": False,
+                    "current_section": None,
+                    "current_section_index": 0,
+                    "total_sections": 7,
+                    "progress_percentage": 0
+                }
+            }
+        
+        try:
+            status = lecture_streamer.get_lecture_status()
+            return {
+                "status": "success",
+                "data": status
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting lecture status: {str(e)}")
+    
+    @router.post("/skip-to-section")
+    async def skip_to_section(request: dict):
+        """Skip to a specific section"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            section_index = request.get("section_index")
+            if section_index is None:
+                raise HTTPException(status_code=400, detail="section_index is required")
+            
+            result = lecture_streamer.skip_to_section(section_index)
+            return result
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error skipping to section: {str(e)}")
+    
+    # NEW: Transcript endpoints
+    @router.get("/transcript")
+    async def get_transcript():
+        """Get the complete lecture transcript"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            return {
+                "status": "success",
+                "data": {
+                    "lecture_start_time": None,
+                    "sections": [],
+                    "transcript": [],
+                    "total_entries": 0
+                }
+            }
+        
+        try:
+            transcript = lecture_streamer.get_transcript()
+            return {
+                "status": "success",
+                "data": transcript
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting transcript: {str(e)}")
+    
+    @router.get("/export-transcript")
+    async def export_transcript(format: str = "json"):
+        """Export transcript in specified format"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            if format not in ["json", "text"]:
+                raise HTTPException(status_code=400, detail="Format must be 'json' or 'text'")
+            
+            transcript = lecture_streamer.export_transcript(format)
+            return {
+                "status": "success",
+                "data": transcript
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error exporting transcript: {str(e)}")
+    
+    @router.post("/clear-transcript")
+    async def clear_transcript():
+        """Clear the lecture transcript"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            lecture_streamer.clear_transcript()
+            return {
+                "status": "success",
+                "message": "Transcript cleared successfully"
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error clearing transcript: {str(e)}")
+    
+    @router.post("/generate-text")
+    async def generate_text(request: dict):
+        """Generate text using Gemini AI"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            prompt = request.get("prompt", "")
+            generated_text = lecture_streamer.generate_text_with_gemini(prompt)
+            
+            return {
+                "status": "success",
+                "message": "Text generated successfully",
+                "data": {
+                    "generated_text": generated_text,
+                    "prompt": prompt
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error generating text: {str(e)}")
+    
+    @router.post("/synthesize-text")
+    async def synthesize_text(request: dict):
+        """Synthesize and stream text"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            text = request.get("text", "")
+            synthesis_thread = lecture_streamer.synthesize_and_stream_text(text)
+            
+            return {
+                "status": "success",
+                "message": "Text synthesized and streaming",
+                "data": {
+                    "text": text,
+                    "synthesis_started": True,
+                    "thread_id": str(synthesis_thread.ident) if synthesis_thread else None
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error synthesizing text: {str(e)}")
+    
+    # NEW: Flashcard Endpoint (Simplified)
+    @router.get("/flashcards")
+    async def get_flashcards(num_cards: int = 10):
+        """Generate flashcards based on lecture content"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            # Validate number of cards
+            if num_cards < 1 or num_cards > 20:
+                raise HTTPException(status_code=400, detail="Number of cards must be between 1 and 20")
+            
+            flashcards = lecture_streamer.generate_flashcards(num_cards)
+            
+            return {
+                "status": "success",
+                "message": f"Generated {flashcards.get('total_cards', 0)} flashcards successfully",
+                "data": flashcards
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error generating flashcards: {str(e)}")
+    
+    @router.get("/quiz")
+    async def get_quiz(num_questions: int = 10):
+        """Generate an AI-powered quiz based on lecture content"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            if num_questions < 1 or num_questions > 20:
+                raise HTTPException(status_code=400, detail="Number of questions must be between 1 and 20")
+            
+            quiz = lecture_streamer.generate_quiz(num_questions)
+            
+            return {
+                "status": "success",
+                "message": f"Generated {quiz.get('total_questions', 0)} quiz questions successfully",
+                "data": quiz
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error generating quiz: {str(e)}")
+    
+    # NEW: Diagram endpoints
+    @router.get("/diagram-status")
+    async def get_diagram_status():
+        """Get current diagram display status"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            diagram_info = getattr(lecture_streamer, 'current_diagram_info', None)
+            current_section = getattr(lecture_streamer, 'current_lecture_section', None)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "has_diagram": diagram_info is not None,
+                    "current_section": current_section,
+                    "diagram_info": diagram_info,
+                    "should_show_overlay": current_section == "diagram_explanation" and diagram_info is not None
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting diagram status: {str(e)}")
+    
+    @router.get("/diagram-image/{image_filename}")
+    async def get_diagram_image(image_filename: str):
+        """Serve the diagram image file"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            from fastapi.responses import FileResponse
+            import os
+            
+            # Use the configured images folder
+            image_path = os.path.join(lecture_streamer.images_folder, image_filename)
+            
+            if not os.path.exists(image_path):
+                raise HTTPException(status_code=404, detail="Image not found")
+            
+            # Verify it's a valid image file
+            valid_extensions = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg']
+            if not any(image_filename.lower().endswith(ext) for ext in valid_extensions):
+                raise HTTPException(status_code=400, detail="Invalid image format")
+            
+            return FileResponse(
+                image_path,
+                media_type="image/png",
+                filename=image_filename
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error serving image: {str(e)}")
+    
+    @router.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        await manager.connect(websocket)
+        try:
+            while True:
+                # Receive message from client
+                data = await websocket.receive_text()
+                try:
+                    message = json.loads(data)
+                    message_type = message.get("type")
+                    
+                    if message_type == "qa_response":
+                        response = message.get("response", "")
+                        print(f"Received Q&A response: {response}")
+                        qa_response_queue.put(response)
+                    elif message_type == "ping":
+                        await websocket.send_text(json.dumps({"type": "pong"}))
+                    
+                except json.JSONDecodeError:
+                    print(f"Invalid JSON received: {data}")
+                    
+        except WebSocketDisconnect:
+            manager.disconnect(websocket)
+        except Exception as e:
+            print(f"WebSocket error: {e}")
+            manager.disconnect(websocket)
+    
+    def get_qa_response_from_frontend(prompt):
+        """Get Q&A response from frontend instead of console input"""
+        # Send the prompt to frontend via WebSocket
+        message = {
+            "type": "qa_prompt",
+            "prompt": prompt,
+            "qa_type": "yes_no" if 'yes' in prompt.lower() or 'no' in prompt.lower() else "question"
+        }
+        
+        # Broadcast to all connected clients
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        loop.run_until_complete(manager.broadcast(json.dumps(message)))
+        
+        # Wait for response from frontend
+        try:
+            response = qa_response_queue.get(timeout=60)  # 60 second timeout
+            return response.strip().lower()
+        except queue.Empty:
+            print("Timeout waiting for frontend response, defaulting to 'no'")
+            return 'no'
+    
+    def run_lecture():
+        """Run the lecture in a separate thread"""
+        global lecture_streamer, is_lecture_running
+        
+        try:
+            print("🎓 Starting physics lecture via API...")
+            print(f"🔍 Debug: lecture_streamer = {lecture_streamer}")
+            print(f"🔍 Debug: is_lecture_running = {is_lecture_running}")
+            
+            if not lecture_streamer:
+                print("❌ Error: lecture_streamer is None!")
+                return
+            
+            # Override the input function to use frontend
+            import builtins
+            original_input = builtins.input
+            
+            def frontend_input(prompt=""):
+                return get_qa_response_from_frontend(prompt)
+            
+            builtins.input = frontend_input
+            
+            print("✅ About to call deliver_full_lecture()...")
+            lecture_streamer.deliver_full_lecture()
+            print("✅ deliver_full_lecture() completed successfully")
+            
+            # Restore original input function
+            builtins.input = original_input
+            
+            # After lecture completion, ensure proper state
+            print("🎉 Lecture delivery completed!")
+            
+        except Exception as e:
+            print(f"❌ Error during lecture: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # Mark as not running and clean up
+            print("🧹 Cleaning up lecture state...")
+            is_lecture_running = False
+            if lecture_streamer:
+                # Keep the streamer alive for flashcard generation, just mark as not running
+                with lecture_streamer.lecture_control_lock:
+                    lecture_streamer.lecture_running = False
+                print("✅ Lecture marked as completed - ready for flashcard generation!")
+                # Don't close the streamer yet - we need it for flashcards
+            else:
+                print("⚠️  Lecture streamer was None during cleanup")
+    
+    def run_web_server():
+        """Run the FastAPI web server"""
+        print("🚀 Starting Physics Lecture Streaming API with Revision Tools...")
+        print("📚 Core Lecture Endpoints:")
+        print("   - POST /start-lecture - Start the physics lecture")
+        print("   - POST /stop-lecture - Stop the running lecture")
+        print("   - GET  /lecture-status - Get lecture progress")
+        print("   - WS   /ws - WebSocket for real-time Q&A")
+        print("🎴 NEW: Revision & Study Tools:")
+        print("   - GET  /lecture-summary - AI-generated summary")
+        print("   - GET  /flashcards?num_cards=10 - Generate flashcards")
+        print("   - GET  /revision-package - Complete study package")
+        print("   - POST /generate-custom-flashcards - Topic-specific cards")
+        print("📖 Documentation:")
+        print("   - GET  / - API information")
+        print("   - GET  /docs - Interactive API documentation")
+        print("   - GET  /redoc - Alternative API documentation")
+        print("🔌 WebSocket events:")
+        print("   - qa_prompt - Receive Q&A prompts")
+        print("   - qa_response - Send Q&A responses")
+        print("=" * 60)
+        
+        uvicorn.run(app, host="0.0.0.0", port=5001, log_level="info")
+    
+    # Only run as web server - no automatic lecture start
+    print("🚀 Physics Lecture API with Revision Tools Ready!")
+    print("📚 Core Lecture Endpoints:")
+    print("   - POST /start-lecture - Start the physics lecture")
+    print("   - POST /stop-lecture - Stop the running lecture")
+    print("   - GET  /lecture-status - Get lecture progress")
+    print("   - WS   /ws - WebSocket for real-time Q&A")
+    print("🎴 NEW: Revision & Study Tools:")
+    print("   - GET  /lecture-summary - AI-generated summary")
+    print("   - GET  /flashcards?num_cards=10 - Generate flashcards")
+    print("   - GET  /revision-package - Complete study package")
+    print("   - POST /generate-custom-flashcards - Topic-specific cards")
+    print("📖 Documentation:")
+    print("   - GET  / - API information")
+    print("   - GET  /docs - Interactive API documentation")
+    print("   - GET  /redoc - Alternative API documentation")
+    print("🔌 WebSocket events:")
+    print("   - qa_prompt - Receive Q&A prompts")
+    print("   - qa_response - Send Q&A responses")
+    print("=" * 60)
+    print("💡 The lecture will only start when you click 'Start Lecture' in the frontend!")
+    print("🎓 After lecture completion, use revision tools to generate summary & flashcards!")
+    print("🌐 Access the frontend at: http://localhost:5173/ai-teacher/class7/science/physics/waves/level1")
+    
+    @router.get("/qa-transcript")
+    async def get_qa_transcript():
+        """Get Q&A transcript"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            return {
+                "status": "success",
+                "data": {
+                    "qa_transcript": [],
+                    "total_entries": 0
+                }
+            }
+        
+        try:
+            qa_transcript = lecture_streamer.generate_qa_transcript()
+            return qa_transcript
+            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting Q&A transcript: {str(e)}")
+    
+    @router.post("/save-lecture")
+    async def save_lecture(user_id: str):
+        """Save lecture transcript and Q&A responses for a user"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture content available")
+        
+        try:
+            # Get transcript and Q&A data
+            transcript_data = lecture_streamer.get_transcript()
+            qa_data = lecture_streamer.generate_qa_transcript()
+            
+            # Format data for saving
+            lecture_data = {
+                "user_id": user_id,
+                "title": "Physics Waves - Level 1",
+                "subject": "Physics",
+                "class_level": "Class 7",
+                "topic": "Introduction to Waves",
+                "saved_at": datetime.now().isoformat(),
+                "transcript": transcript_data,
+                "qa_interactions": qa_data.get("data", {}).get("qa_transcript", []),
+                "sections": lecture_streamer.sections,
+                "total_sections": len(lecture_streamer.sections)
+            }
+            
+            # Save to database
+            try:
+                result = supabase.table("saved_lectures").insert(lecture_data).execute()
+                
+                return {
+                    "status": "success",
+                    "message": "Lecture saved successfully",
+                    "data": {
+                        "lecture_id": result.data[0]["id"] if result.data else None,
+                        "saved_at": lecture_data["saved_at"]
+                    }
+                }
+                
+            except Exception as db_error:
+                print(f"Database error: {db_error}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save lecture: {str(db_error)}"
+                )
+                
+        except Exception as e:
+            print(f"Error saving lecture: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving lecture: {str(e)}"
+            )
+
+    @router.get("/saved-lectures/{user_email}")
+    async def get_saved_lectures(user_email: str):
+        """Get all saved lectures for a user"""
+        try:
+            result = supabase.table("saved_lectures").select("*").eq("user_email", user_email).execute()
+            
+            return {
+                "status": "success",
+                "data": {
+                    "lectures": result.data,
+                    "total_lectures": len(result.data)
+                }
+            }
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching saved lectures: {str(e)}"
+            )
+
+    @router.get("/saved-lecture/{lecture_id}")
+    async def get_saved_lecture(lecture_id: str):
+        """Get a specific saved lecture"""
+        try:
+            result = supabase.table("saved_lectures").select("*").eq("id", lecture_id).execute()
+            
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Lecture not found")
+            
+            return {
+                "status": "success",
+                "data": result.data[0]
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error fetching lecture: {str(e)}"
+            )
+    
+    # Using get_current_user_token from auth.py
+
+    @router.post("/save-current-lecture")
+    async def save_current_lecture(token_data: TokenData = Depends(get_current_user_token), credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+        """Save the current lecture for the user"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture content available")
+        
+        try:
+            # Get user data using the existing function
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Get transcript, Q&A data, and diagram info
+            transcript_data = lecture_streamer.get_transcript()
+            qa_data = lecture_streamer.generate_qa_transcript()
+            diagram_info = getattr(lecture_streamer, 'current_diagram_info', None)
+            
+            # Enhanced diagram info with image data
+            enhanced_diagram_info = None
+            if diagram_info:
+                try:
+                    import base64
+                    import os
+                    
+                    # Get the image path from diagram info
+                    image_path = diagram_info.get('image_path')
+                    if image_path and os.path.exists(image_path):
+                        # Read the image file and encode it as base64
+                        with open(image_path, 'rb') as image_file:
+                            image_data = image_file.read()
+                            image_base64 = base64.b64encode(image_data).decode('utf-8')
+                        
+                        enhanced_diagram_info = {
+                            **diagram_info,
+                            'image_base64': image_base64,
+                            'image_size': len(image_data),
+                            'image_url': f"/diagram-image/{diagram_info.get('image_filename', '')}"
+                        }
+                        print(f"🖼️  Enhanced diagram info with image data ({len(image_data)} bytes)")
+                    else:
+                        enhanced_diagram_info = diagram_info
+                        print("⚠️  Diagram image file not found, using basic diagram info")
+                except Exception as e:
+                    print(f"❌ Error processing diagram image: {e}")
+                    enhanced_diagram_info = diagram_info
+            
+            # Debug: Check what sections are in the transcript
+            if transcript_data and "transcript" in transcript_data:
+                transcript_sections = [entry.get("section", "") for entry in transcript_data["transcript"]]
+                print(f"🔍 Transcript sections before saving: {transcript_sections}")
+                print(f"🔍 Expected sections: {lecture_streamer.sections}")
+                
+                # Ensure diagram explanation and ending are present
+                if "diagram_explanation" not in transcript_sections:
+                    print("⚠️  Diagram explanation missing, adding fallback")
+                    lecture_streamer.add_to_transcript("diagram_explanation", "Wave diagrams help us understand wave properties. The highest point is called the crest, and the lowest point is the trough. The distance between two crests is the wavelength. The height of the wave from the middle to the crest is the amplitude. More waves passing per second means higher frequency. These diagrams help us visualize how waves behave and measure their properties!")
+                
+
+                
+                # Get updated transcript after adding missing sections
+                transcript_data = lecture_streamer.get_transcript()
+            
+            # Format data for saving
+            lecture_data = {
+                "user_email": user_data.email,  # Use email for custom auth
+                "title": "Physics Waves - Level 1",
+                "subject": "Physics",
+                "class_level": "Class 7",
+                "topic": "Introduction to Waves",
+                "saved_at": datetime.now().isoformat(),
+                "transcript": {
+                    "sections": transcript_data.get("sections", []),
+                    "transcript": [
+                        {
+                            "section": entry.get("section", ""),
+                            "text": entry.get("text", ""),
+                            "timestamp": entry.get("timestamp", "")
+                        }
+                        for entry in transcript_data.get("transcript", [])
+                    ]
+                },
+                "qa_interactions": [
+                    {
+                        "section": qa.get("section", ""),
+                        "text": qa.get("text", ""),
+                        "timestamp": qa.get("timestamp", ""),
+                        "type": qa.get("type", "qa")
+                    }
+                    for qa in qa_data.get("data", {}).get("qa_transcript", [])
+                ],
+                "sections": lecture_streamer.sections,
+                "total_sections": len(lecture_streamer.sections),
+                "diagram_info": enhanced_diagram_info,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # Save to database using authenticated client
+            try:
+                print("Saving lecture data:", lecture_data)  # Debug log
+                
+                # Use service role key to bypass RLS for authenticated operations
+                from config import supabase, SERVICE_ROLE_KEY, SUPABASE_URL
+                from supabase import create_client, Client
+                
+                # Create service role client (bypasses RLS)
+                auth_supabase: Client = create_client(SUPABASE_URL, SERVICE_ROLE_KEY)
+                
+                result = auth_supabase.table("saved_lectures").insert(lecture_data).execute()
+                print("Save result:", result)  # Debug log
+                
+                # If save is successful, add to transcript
+                lecture_streamer.add_to_transcript(
+                    "save_option",
+                    "Lecture saved successfully for revision."
+                )
+                
+                return {
+                    "status": "success",
+                    "message": "Lecture saved successfully",
+                    "data": {
+                        "lecture_id": result.data[0]["id"] if result.data else None,
+                        "saved_at": lecture_data["saved_at"]
+                    }
+                }
+                
+            except Exception as db_error:
+                print(f"Database error: {db_error}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save lecture: {str(db_error)}"
+                )
+                
+        except Exception as e:
+            print(f"Error saving lecture: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error saving lecture: {str(e)}"
+            )
+
+    @router.delete("/saved-lecture/{lecture_id}")
+    async def delete_saved_lecture(lecture_id: str, token_data: TokenData = Depends(get_current_user_token), credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())):
+        """Delete a saved lecture by ID"""
+        try:
+            print(f"🗑️  Attempting to delete lecture: {lecture_id}")
+            print(f"👤 User email: {token_data.email}")
+            
+            # Use service role key to bypass RLS for authenticated operations
+            from config import supabase, SERVICE_ROLE_KEY, SUPABASE_URL
+            from supabase import create_client, Client
+            
+            # Create service role client (bypasses RLS)
+            auth_supabase: Client = create_client(SUPABASE_URL, SERVICE_ROLE_KEY)
+            
+            # Check if lecture exists and belongs to user
+            print(f"🔍 Checking if lecture exists for user: {token_data.email}")
+            lecture = auth_supabase.table("saved_lectures").select("*").eq("id", lecture_id).eq("user_email", token_data.email).execute()
+            
+            if not lecture.data:
+                print(f"❌ Lecture not found or access denied for user: {token_data.email}")
+                raise HTTPException(status_code=404, detail="Lecture not found or access denied")
+            
+            print(f"✅ Lecture found, proceeding with deletion")
+            # Delete the lecture
+            result = auth_supabase.table("saved_lectures").delete().eq("id", lecture_id).eq("user_email", token_data.email).execute()
+            
+            print(f"✅ Lecture deleted successfully")
+            return {
+                "status": "success",
+                "message": "Lecture deleted successfully"
+            }
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"❌ Error deleting lecture: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error deleting lecture: {str(e)}")
+
+    # NEW: Interactive Diagram Endpoints
+    @router.get("/interactive-diagram/analyze")
+    async def analyze_diagram_for_labels():
+        """Analyze the current diagram and extract clickable labels"""
+        try:
+            if not lecture_streamer:
+                raise HTTPException(status_code=404, detail="Lecture streamer not available")
+            
+            # Get the current diagram image
+            image_path = os.path.join(lecture_streamer.images_folder, "image1.png")
+            
+            if not os.path.exists(image_path):
+                raise HTTPException(status_code=404, detail="Diagram image not found")
+            
+            # Analyze the diagram using AI to identify labels
+            labels = await analyze_diagram_labels(image_path)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "labels": labels,
+                    "image_filename": "image1.png",
+                    "total_labels": len(labels)
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error analyzing diagram: {e}")
+            raise HTTPException(status_code=500, detail=f"Error analyzing diagram: {str(e)}")
+
+    @router.post("/interactive-diagram/explain-label")
+    async def explain_diagram_label(request: dict):
+        """Explain a specific label when clicked"""
+        try:
+            label = request.get("label")
+            if not label:
+                raise HTTPException(status_code=400, detail="Label is required")
+            
+            # Generate explanation for the label
+            explanation = await generate_label_explanation(label)
+            
+            # Synthesize speech for the explanation
+            if lecture_streamer and lecture_streamer.tts:
+                try:
+                    # For interactive diagram, we need to ensure audio works immediately
+                    # even when lecture is paused
+                    
+                    # Ensure audio stream is open for interactive diagram
+                    if not lecture_streamer.stream or not lecture_streamer.stream.is_active():
+                        print("Reopening audio stream for interactive diagram")
+                        lecture_streamer.open_audio_stream()
+                    
+                    # Ensure audio thread is running
+                    if not lecture_streamer.audio_thread_running:
+                        print("Starting audio thread for interactive diagram")
+                        lecture_streamer.start_audio_thread()
+                    
+                    # Clean text for TTS
+                    clean_explanation = lecture_streamer.clean_text_for_tts(explanation)
+                    print(f"TTS: Synthesizing explanation for '{label}': {clean_explanation[:50]}...")
+                    
+                    # For interactive diagram, we need to bypass the pause check
+                    # and directly synthesize the audio
+                    if lecture_streamer.interactive_diagram_active:
+                        print("Interactive diagram active - synthesizing audio immediately")
+                        # Direct synthesis for interactive diagram
+                        lecture_streamer.synthesize_and_stream_text(clean_explanation)
+                    else:
+                        # Normal synthesis for regular lecture
+                        lecture_streamer.synthesize_and_stream_text(clean_explanation)
+                    
+                    # Add to interactive diagram transcript only (not main lecture transcript)
+                    # This keeps transcript inside the interactive diagram overlay
+                    if hasattr(lecture_streamer, 'interactive_transcript'):
+                        lecture_streamer.interactive_transcript.append({
+                            "label": label,
+                            "explanation": explanation,
+                            "timestamp": datetime.now().isoformat()
+                        })
+                    else:
+                        # Initialize interactive transcript if it doesn't exist
+                        lecture_streamer.interactive_transcript = [{
+                            "label": label,
+                            "explanation": explanation,
+                            "timestamp": datetime.now().isoformat()
+                        }]
+                    
+                    print(f"TTS: Successfully synthesized explanation for '{label}'")
+                    
+                except Exception as tts_error:
+                    print(f"TTS error for interactive diagram: {tts_error}")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print(f"TTS not available for interactive diagram. TTS: {lecture_streamer.tts if lecture_streamer else 'No streamer'}")
+            
+            return {
+                "status": "success",
+                "data": {
+                    "label": label,
+                    "explanation": explanation,
+                    "audio_generated": lecture_streamer.tts is not None
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error explaining label: {e}")
+            raise HTTPException(status_code=500, detail=f"Error explaining label: {str(e)}")
+
+    @router.get("/interactive-diagram/status")
+    async def get_interactive_diagram_status():
+        """Get the current status of interactive diagram"""
+        try:
+            if not lecture_streamer:
+                return {
+                    "status": "success",
+                    "data": {
+                        "is_active": False,
+                        "current_label": None,
+                        "labels": [],
+                        "image_filename": None
+                    }
+                }
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_active": getattr(lecture_streamer, 'interactive_diagram_active', False),
+                    "current_label": getattr(lecture_streamer, 'current_label', None),
+                    "labels": getattr(lecture_streamer, 'diagram_labels', []),
+                    "image_filename": "image1.png"
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error getting interactive diagram status: {e}")
+            raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
+
+    @router.post("/interactive-diagram/activate")
+    async def activate_interactive_diagram():
+        """Activate the interactive diagram mode"""
+        try:
+            if not lecture_streamer:
+                raise HTTPException(status_code=404, detail="Lecture streamer not available")
+            
+            # Clear the audio queue for immediate interactive diagram TTS
+            print("Clearing audio queue for interactive diagram")
+            lecture_streamer.clear_audio_queue()
+            
+            # Ensure audio system is ready for interactive diagram TTS
+            print("Ensuring audio system is ready for interactive diagram")
+            if not lecture_streamer.stream or not lecture_streamer.stream.is_active():
+                print("Opening audio stream for interactive diagram")
+                lecture_streamer.open_audio_stream()
+            
+            if not lecture_streamer.audio_thread_running:
+                print("Starting audio thread for interactive diagram")
+                lecture_streamer.start_audio_thread()
+            
+            # Set interactive diagram as active
+            lecture_streamer.interactive_diagram_active = True
+            
+            # Initialize interactive transcript for this session
+            lecture_streamer.interactive_transcript = []
+            
+            # Analyze diagram for labels
+            image_path = os.path.join(lecture_streamer.images_folder, "image1.png")
+            labels = await analyze_diagram_labels(image_path)
+            
+            # Store labels in lecture streamer
+            lecture_streamer.diagram_labels = labels
+            
+            # Don't add transcript entry - keep it silent for cleaner UX
+            # The frontend will handle the user notification
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_active": True,
+                    "labels": labels,
+                    "image_filename": "image1.png",
+                    "message": f"Interactive diagram activated with {len(labels)} labels - Queue cleared for immediate TTS"
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error activating interactive diagram: {e}")
+            raise HTTPException(status_code=500, detail=f"Error activating diagram: {str(e)}")
+
+    @router.get("/interactive-diagram/transcript")
+    async def get_interactive_diagram_transcript():
+        """Get the interactive diagram transcript"""
+        try:
+            if not lecture_streamer:
+                return {
+                    "status": "success",
+                    "data": {
+                        "transcript": []
+                    }
+                }
+            
+            interactive_transcript = getattr(lecture_streamer, 'interactive_transcript', [])
+            
+            return {
+                "status": "success",
+                "data": {
+                    "transcript": interactive_transcript
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error getting interactive diagram transcript: {e}")
+            raise HTTPException(status_code=500, detail=f"Error getting transcript: {str(e)}")
+
+    @router.post("/interactive-diagram/deactivate")
+    async def deactivate_interactive_diagram():
+        """Deactivate the interactive diagram mode"""
+        try:
+            if not lecture_streamer:
+                raise HTTPException(status_code=404, detail="Lecture streamer not available")
+            
+            # Clear any remaining TTS in the queue to ensure clean transition
+            # This prevents leftover audio from interactive diagram from interfering with lecture TTS
+            lecture_streamer.clear_audio_queue()
+            
+            # Stop any ongoing TTS synthesis for interactive diagram
+            print("Stopping any ongoing TTS synthesis for interactive diagram")
+            
+            # Small delay to ensure clean transition
+            import time
+            time.sleep(0.5)
+            
+            # Set interactive diagram as inactive
+            lecture_streamer.interactive_diagram_active = False
+            lecture_streamer.current_label = None
+            
+            # Clear interactive transcript to leave no traces
+            if hasattr(lecture_streamer, 'interactive_transcript'):
+                lecture_streamer.interactive_transcript = []
+            
+            # Don't add transcript entry - just deactivate silently
+            # The lecture continues naturally from where it left off
+            
+            return {
+                "status": "success",
+                "data": {
+                    "is_active": False,
+                    "message": "Interactive diagram deactivated - Lecture continues with clean TTS"
+                }
+            }
+            
+        except Exception as e:
+            print(f"Error deactivating interactive diagram: {e}")
+            raise HTTPException(status_code=500, detail=f"Error deactivating diagram: {str(e)}")
+
+    # Helper functions for interactive diagram
+    async def analyze_diagram_labels(image_path: str) -> List[Dict[str, Any]]:
+        """Analyze diagram image and extract clickable labels using AI"""
+        try:
+            # Read and encode the image
+            with open(image_path, "rb") as image_file:
+                import base64
+                image_data = base64.b64encode(image_file.read()).decode('utf-8')
+            
+            # Create AI prompt for diagram analysis
+            analysis_prompt = f"""
+            Analyze this wave diagram image and identify the key elements that should be labeled for educational purposes.
+            
+            Please identify:
+            1. Wave properties (wavelength, amplitude, frequency, etc.)
+            2. Wave features (crests, troughs, equilibrium line, etc.)
+            3. Any other important elements visible in the diagram
+            
+            For each identified element, provide:
+            - A clear, educational name
+            - A brief description of what it represents
+            - Suggested position coordinates (x, y as percentages)
+            - A unique color code for visual distinction
+            
+            Return the analysis as a JSON array of objects with this structure:
+            [
+                {{
+                    "id": "unique_identifier",
+                    "name": "Element Name",
+                    "description": "Brief description",
+                    "position": {{"x": percentage, "y": percentage}},
+                    "color": "#hexcolor"
+                }}
+            ]
+            
+            Focus on making this educational and student-friendly. Include 4-8 key elements that would help a student understand wave properties.
+            """
+            
+            # Use Gemini AI to analyze the diagram
+            if lecture_streamer and lecture_streamer.gemini_api_key:
+                try:
+                    # Prepare the request for Gemini
+                    gemini_request = {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {
+                                        "text": analysis_prompt
+                                    },
+                                    {
+                                        "inline_data": {
+                                            "mime_type": "image/png",
+                                            "data": image_data
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.3,
+                            "topK": 40,
+                            "topP": 0.95,
+                            "maxOutputTokens": 2048,
+                        }
+                    }
+                    
+                    # Make request to Gemini
+                    response = requests.post(
+                        lecture_streamer.gemini_url,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": lecture_streamer.gemini_api_key
+                        },
+                        json=gemini_request,
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if "candidates" in result and len(result["candidates"]) > 0:
+                            content = result["candidates"][0]["content"]["parts"][0]["text"]
+                            
+                            # Extract JSON from the response
+                            import re
+                            json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                            if json_match:
+                                import json
+                                labels = json.loads(json_match.group())
+                                
+                                # Validate and clean the labels
+                                cleaned_labels = []
+                                colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#A8E6CF", "#FF8B94"]
+                                
+                                for i, label in enumerate(labels):
+                                    if isinstance(label, dict) and "name" in label:
+                                        cleaned_label = {
+                                            "id": label.get("id", f"label_{i}"),
+                                            "name": label["name"],
+                                            "description": label.get("description", f"Description of {label['name']}"),
+                                            "position": label.get("position", {"x": 20 + (i * 15), "y": 20 + (i * 10)}),
+                                            "color": label.get("color", colors[i % len(colors)])
+                                        }
+                                        cleaned_labels.append(cleaned_label)
+                                
+                                print(f"AI analyzed diagram and found {len(cleaned_labels)} labels")
+                                return cleaned_labels
+                    
+                    print("Failed to get AI analysis, using fallback")
+                    
+                except Exception as ai_error:
+                    print(f"AI analysis error: {ai_error}")
+            
+            # Fallback to predefined labels if AI fails
+            print("Using fallback labels for wave diagram")
+            fallback_labels = [
+                {
+                    "id": "wavelength",
+                    "name": "Wavelength",
+                    "description": "Distance between consecutive wave peaks",
+                    "position": {"x": 30, "y": 50},
+                    "color": "#FF6B6B"
+                },
+                {
+                    "id": "amplitude", 
+                    "name": "Amplitude",
+                    "description": "Maximum displacement from equilibrium",
+                    "position": {"x": 70, "y": 30},
+                    "color": "#4ECDC4"
+                },
+                {
+                    "id": "crest",
+                    "name": "Crest",
+                    "description": "Highest point of the wave",
+                    "position": {"x": 50, "y": 20},
+                    "color": "#45B7D1"
+                },
+                {
+                    "id": "trough",
+                    "name": "Trough", 
+                    "description": "Lowest point of the wave",
+                    "position": {"x": 50, "y": 80},
+                    "color": "#96CEB4"
+                }
+            ]
+            
+            return fallback_labels
+            
+        except Exception as e:
+            print(f"Error analyzing diagram labels: {e}")
+            return []
+
+    async def generate_label_explanation(label: str) -> str:
+        """Generate a friendly explanation for a diagram label using AI"""
+        try:
+            # Create AI prompt for explanation
+            explanation_prompt = f"""
+            You are a friendly and enthusiastic physics teacher explaining wave concepts to a 7th-grade student.
+            
+            Please provide a clear, engaging, and educational explanation for the wave property: "{label}"
+            
+            Your explanation should:
+            1. Be friendly and conversational (like talking to a friend)
+            2. Use simple, relatable examples (like ocean waves, sound, light)
+            3. Explain what this property means in simple terms
+            4. Mention how it's measured or observed
+            5. Connect it to real-world applications
+            6. Be about 2-3 sentences long
+            
+            Make it fun and memorable! Use analogies that a 7th grader would understand.
+            """
+            
+            # Use Gemini AI to generate explanation
+            if lecture_streamer and lecture_streamer.gemini_api_key:
+                try:
+                    # Prepare the request for Gemini
+                    gemini_request = {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {
+                                        "text": explanation_prompt
+                                    }
+                                ]
+                            }
+                        ],
+                        "generationConfig": {
+                            "temperature": 0.7,
+                            "topK": 40,
+                            "topP": 0.95,
+                            "maxOutputTokens": 500,
+                        }
+                    }
+                    
+                    # Make request to Gemini
+                    response = requests.post(
+                        lecture_streamer.gemini_url,
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-goog-api-key": lecture_streamer.gemini_api_key
+                        },
+                        json=gemini_request,
+                        timeout=15
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if "candidates" in result and len(result["candidates"]) > 0:
+                            explanation = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+                            print(f"AI generated explanation for '{label}': {explanation[:100]}...")
+                            return explanation
+                    
+                    print("Failed to get AI explanation, using fallback")
+                    
+                except Exception as ai_error:
+                    print(f"AI explanation error: {ai_error}")
+            
+            # Fallback explanations if AI fails
+            fallback_explanations = {
+                "wavelength": "The wavelength is the distance between two consecutive wave peaks or troughs. Think of it like the length of one complete wave cycle - it's how far you have to travel along the wave before it starts repeating! Wavelength is measured in meters and determines the color of light waves or the pitch of sound waves.",
+                
+                "amplitude": "The amplitude is the maximum displacement of the wave from its equilibrium position. It tells us how 'tall' or 'strong' the wave is - like how high ocean waves get or how loud a sound is. Amplitude determines the brightness of light waves or the loudness of sound waves.",
+                
+                "crest": "The crest is the highest point of the wave - the peak where the wave reaches its maximum positive displacement. In our diagram, you can see these as the top points of the wave. When you're at the beach, the crests are the highest points of the ocean waves that surfers love to ride!",
+                
+                "trough": "The trough is the lowest point of the wave - the valley where the wave reaches its maximum negative displacement. In our diagram, you can see these as the bottom points of the wave. Think of it like the lowest point between two ocean waves.",
+                
+                "equilibrium": "The equilibrium line is the baseline or rest position of the wave - it's where the wave would be if there was no disturbance. In our diagram, this is the horizontal line that runs through the middle of the wave. It represents the normal, undisturbed state of the medium.",
+                
+                "frequency": "The frequency is the number of complete wave cycles that pass a point in one second. It's measured in Hertz (Hz). Higher frequency means more waves per second, which results in shorter wavelengths. For sound waves, higher frequency means higher pitch. For light waves, higher frequency means different colors!"
+            }
+            
+            return fallback_explanations.get(label.lower(), f"The {label} is an important property of waves that helps us understand how waves behave and interact with the world around us.")
+            
+        except Exception as e:
+            print(f"Error generating label explanation: {e}")
+            return f"The {label} is an important wave property that helps us understand wave behavior."
+
+except ImportError as e:
+    print(f"⚠️  FastAPI dependencies not available: {e}")
+    print("📝 Running in standalone mode only")
+    print("💡 To run as web server, install: pip install fastapi uvicorn")
+    
+    # Don't run standalone lecture automatically
+    print("🚀 Physics Lecture API with Revision Tools Ready!")
+    print("💡 The lecture will only start when you click 'Start Lecture' in the frontend!")
+    print("🎓 After lecture completion, use revision tools to generate summary & flashcards!")
+
+if __name__ == "__main__":
+    # Don't run anything automatically - wait for API calls
+    pass 

@@ -1,0 +1,41 @@
+backend/venv/
+node_modules/ __pycache__/
+*.pyc
+*.pyo
+backend/venv/
+venv/
+env/
+*.pyc
+__pycache__/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+.venv/
+venv/
+env/
+
+# Exclude all image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Exclude upload directories completely
+uploads/
+backend/uploads/
+frontend/uploads/
+
+# Exclude all image files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+
+# Exclude upload directories completely
+uploads/
+backend/uploads/
+frontend/uploads/
