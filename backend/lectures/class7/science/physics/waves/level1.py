@@ -128,6 +128,11 @@ class PhysicsLectureStreamer:
         self.lecture_start_time = None
         self.section_start_times = {}
         
+        # NEW: Notes system
+        self.notes = []
+        self.notes_lock = threading.Lock()
+        self.notes_paused_state = False
+        
         # Lecture control
         self.lecture_thread = None
         self.lecture_control_lock = threading.Lock()
@@ -1297,6 +1302,91 @@ class PhysicsLectureStreamer:
             self.section_start_times.clear()
             print("🗑️  Transcript cleared")
     
+    # NEW: Notes functionality
+    def add_note(self, content, timestamp=None):
+        """Add a note with timestamp"""
+        if timestamp is None:
+            timestamp = datetime.now()
+        
+        with self.notes_lock:
+            note_entry = {
+                "id": f"note_{len(self.notes) + 1}_{timestamp.strftime('%Y%m%d_%H%M%S')}",
+                "content": content,
+                "timestamp": timestamp.isoformat(),
+                "section": self.current_lecture_section if hasattr(self, 'current_lecture_section') else "unknown",
+                "section_index": self.current_section_index if hasattr(self, 'current_section_index') else -1
+            }
+            self.notes.append(note_entry)
+            print(f"📝 Added note: {content[:50]}{'...' if len(content) > 50 else ''}")
+            return note_entry
+    
+    def get_notes(self):
+        """Get all notes"""
+        with self.notes_lock:
+            return {
+                "notes": self.notes.copy(),
+                "total_notes": len(self.notes),
+                "lecture_start_time": self.lecture_start_time.isoformat() if self.lecture_start_time else None
+            }
+    
+    def update_note(self, note_id, new_content):
+        """Update an existing note"""
+        with self.notes_lock:
+            for note in self.notes:
+                if note["id"] == note_id:
+                    note["content"] = new_content
+                    note["updated_at"] = datetime.now().isoformat()
+                    print(f"📝 Updated note: {note_id}")
+                    return note
+            return None
+    
+    def delete_note(self, note_id):
+        """Delete a note"""
+        with self.notes_lock:
+            for i, note in enumerate(self.notes):
+                if note["id"] == note_id:
+                    deleted_note = self.notes.pop(i)
+                    print(f"🗑️  Deleted note: {note_id}")
+                    return deleted_note
+            return None
+    
+    def clear_notes(self):
+        """Clear all notes"""
+        with self.notes_lock:
+            self.notes.clear()
+            print("🗑️  All notes cleared")
+    
+    def pause_for_notes(self):
+        """Pause lecture specifically for note-taking"""
+        try:
+            # Store current pause state
+            was_paused = self.audio_paused
+            
+            # Pause the audio
+            with self.audio_pause_lock:
+                self.audio_paused = True
+                self.notes_paused_state = True
+            
+            print("📝 Lecture paused for note-taking")
+            return {"status": "success", "message": "Lecture paused for notes", "was_already_paused": was_paused}
+        except Exception as e:
+            print(f"❌ Error pausing for notes: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def resume_from_notes(self):
+        """Resume lecture after note-taking"""
+        try:
+            # Resume the audio
+            with self.audio_pause_lock:
+                self.audio_paused = False
+                self.notes_paused_state = False
+            
+            print("▶️  Lecture resumed from note-taking")
+            return {"status": "success", "message": "Lecture resumed from notes"}
+        except Exception as e:
+            print(f"❌ Error resuming from notes: {e}")
+            return {"status": "error", "message": str(e)}
+    
     # NEW: Flashcard Generation (Simplified)
     def generate_flashcards(self, num_cards=10):
         """Generate flashcards based on the lecture content"""
@@ -1840,6 +1930,16 @@ try:
         message: str
         lecture_status: str = None
     
+    class NoteRequest(BaseModel):
+        content: str
+    
+    class NoteUpdateRequest(BaseModel):
+        note_id: str
+        content: str
+    
+    class NoteDeleteRequest(BaseModel):
+        note_id: str
+    
     @router.get("/")
     async def home():
         """Home endpoint"""
@@ -1857,6 +1957,13 @@ try:
                 "/change-voice": "POST - Change TTS voice (male/female)",
                 "/enable-qa": "POST - Enable Q&A sessions",
                 "/disable-qa": "POST - Disable Q&A sessions",
+                "/notes/pause": "POST - Pause lecture for note-taking",
+                "/notes/resume": "POST - Resume lecture after note-taking",
+                "/notes/add": "POST - Add a new note",
+                "/notes": "GET - Get all notes",
+                "/notes/update": "PUT - Update an existing note",
+                "/notes/delete": "DELETE - Delete a note",
+                "/notes/clear": "POST - Clear all notes",
                 "/docs": "GET - API documentation (Swagger UI)",
                 "/redoc": "GET - Alternative API documentation",
                 "/ws": "WebSocket endpoint for real-time communication",
@@ -2094,6 +2201,133 @@ try:
                 raise HTTPException(status_code=400, detail="Cannot resume lecture - not running or not paused")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error resuming lecture: {str(e)}")
+    
+    # NEW: Notes API Endpoints
+    @router.post("/notes/pause")
+    async def pause_for_notes():
+        """Pause lecture for note-taking"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            result = lecture_streamer.pause_for_notes()
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error pausing for notes: {str(e)}")
+    
+    @router.post("/notes/resume")
+    async def resume_from_notes():
+        """Resume lecture after note-taking"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            result = lecture_streamer.resume_from_notes()
+            return result
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error resuming from notes: {str(e)}")
+    
+    @router.post("/notes/add")
+    async def add_note(note_request: NoteRequest):
+        """Add a new note"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            note = lecture_streamer.add_note(note_request.content)
+            return {
+                "status": "success",
+                "message": "Note added successfully",
+                "note": note
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error adding note: {str(e)}")
+    
+    @router.get("/notes")
+    async def get_notes():
+        """Get all notes"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            notes_data = lecture_streamer.get_notes()
+            return {
+                "status": "success",
+                "data": notes_data
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}")
+    
+    @router.put("/notes/update")
+    async def update_note(note_update: NoteUpdateRequest):
+        """Update an existing note"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            updated_note = lecture_streamer.update_note(note_update.note_id, note_update.content)
+            if updated_note:
+                return {
+                    "status": "success",
+                    "message": "Note updated successfully",
+                    "note": updated_note
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Note not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error updating note: {str(e)}")
+    
+    @router.delete("/notes/delete")
+    async def delete_note(note_delete: NoteDeleteRequest):
+        """Delete a note"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            deleted_note = lecture_streamer.delete_note(note_delete.note_id)
+            if deleted_note:
+                return {
+                    "status": "success",
+                    "message": "Note deleted successfully",
+                    "deleted_note": deleted_note
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Note not found")
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error deleting note: {str(e)}")
+    
+    @router.post("/notes/clear")
+    async def clear_notes():
+        """Clear all notes"""
+        global lecture_streamer
+        
+        if not lecture_streamer:
+            raise HTTPException(status_code=400, detail="No lecture streamer available")
+        
+        try:
+            lecture_streamer.clear_notes()
+            return {
+                "status": "success",
+                "message": "All notes cleared successfully"
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error clearing notes: {str(e)}")
     
     @router.get("/lecture-status")
     async def get_detailed_lecture_status():

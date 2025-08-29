@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./Level1.css";
 import InteractiveDiagram from "./InteractiveDiagram";
+import NotesManager from "./NotesManager";
 import { motion, AnimatePresence } from "framer-motion";
 
 // TypeScript declarations for Speech Recognition API
@@ -279,6 +280,9 @@ const PhysicsWavesLevel1: React.FC = () => {
   );
   const [isExplaining, setIsExplaining] = useState(false);
   const [interactiveTranscript, setInteractiveTranscript] = useState<any[]>([]);
+
+  // NEW: Notes states
+  const [showNotesPopup, setShowNotesPopup] = useState(false);
 
   const websocketRef = useRef<WebSocket | null>(null);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
@@ -1396,6 +1400,24 @@ const PhysicsWavesLevel1: React.FC = () => {
                 </motion.button>
               );
             })()}
+
+            {/* NEW: Notes Button */}
+            <motion.button
+              onClick={() => setShowNotesPopup(true)}
+              className="control-btn notes-btn bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              whileHover={{
+                scale: 1.05,
+                boxShadow: "0 20px 40px rgba(147, 51, 234, 0.3)",
+              }}
+              whileTap={{ scale: 0.95 }}
+              title="Take notes during the lecture"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📝</span>
+                <span>Notes</span>
+              </div>
+            </motion.button>
+
             <motion.button
               onClick={stopLecture}
               className="control-btn stop-btn bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-400 hover:to-pink-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
@@ -1953,6 +1975,22 @@ const PhysicsWavesLevel1: React.FC = () => {
           interactiveTranscript={interactiveTranscript}
         />
       )}
+
+      {/* NEW: Enhanced Notes Manager */}
+      <NotesManager
+        isOpen={showNotesPopup}
+        onClose={() => setShowNotesPopup(false)}
+        onPause={async () => {
+          // Use the existing pauseLecture function
+          await pauseLecture();
+        }}
+        onResume={async () => {
+          // Use the existing resumeLecture function
+          await resumeLecture();
+        }}
+        API_BASE_URL={API_BASE_URL}
+        API_ENDPOINT={API_ENDPOINT}
+      />
     </div>
   );
 };
