@@ -20,7 +20,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from auth import get_current_user_token, TokenData, get_current_user_data
-from config import supabase, SECRET_KEY, ALGORITHM
+from config import supabase, supabase_service, SECRET_KEY, ALGORITHM
 import logging
 
 # Security
@@ -1302,59 +1302,8 @@ class PhysicsLectureStreamer:
             self.section_start_times.clear()
             print("🗑️  Transcript cleared")
     
-    # NEW: Notes functionality
-    def add_note(self, content, timestamp=None):
-        """Add a note with timestamp"""
-        if timestamp is None:
-            timestamp = datetime.now()
-        
-        with self.notes_lock:
-            note_entry = {
-                "id": f"note_{len(self.notes) + 1}_{timestamp.strftime('%Y%m%d_%H%M%S')}",
-                "content": content,
-                "timestamp": timestamp.isoformat(),
-                "section": self.current_lecture_section if hasattr(self, 'current_lecture_section') else "unknown",
-                "section_index": self.current_section_index if hasattr(self, 'current_section_index') else -1
-            }
-            self.notes.append(note_entry)
-            print(f"📝 Added note: {content[:50]}{'...' if len(content) > 50 else ''}")
-            return note_entry
-    
-    def get_notes(self):
-        """Get all notes"""
-        with self.notes_lock:
-            return {
-                "notes": self.notes.copy(),
-                "total_notes": len(self.notes),
-                "lecture_start_time": self.lecture_start_time.isoformat() if self.lecture_start_time else None
-            }
-    
-    def update_note(self, note_id, new_content):
-        """Update an existing note"""
-        with self.notes_lock:
-            for note in self.notes:
-                if note["id"] == note_id:
-                    note["content"] = new_content
-                    note["updated_at"] = datetime.now().isoformat()
-                    print(f"📝 Updated note: {note_id}")
-                    return note
-            return None
-    
-    def delete_note(self, note_id):
-        """Delete a note"""
-        with self.notes_lock:
-            for i, note in enumerate(self.notes):
-                if note["id"] == note_id:
-                    deleted_note = self.notes.pop(i)
-                    print(f"🗑️  Deleted note: {note_id}")
-                    return deleted_note
-            return None
-    
-    def clear_notes(self):
-        """Clear all notes"""
-        with self.notes_lock:
-            self.notes.clear()
-            print("🗑️  All notes cleared")
+    # Notes functionality is now handled by database endpoints
+    # The in-memory notes system has been replaced with user-specific database storage
     
     def pause_for_notes(self):
         """Pause lecture specifically for note-taking"""
@@ -1932,6 +1881,7 @@ try:
     
     class NoteRequest(BaseModel):
         content: str
+        lecture_section: Optional[str] = None
     
     class NoteUpdateRequest(BaseModel):
         note_id: str
@@ -2232,7 +2182,10 @@ try:
             raise HTTPException(status_code=500, detail=f"Error resuming from notes: {str(e)}")
     
     @router.post("/notes/add")
-    async def add_note(note_request: NoteRequest):
+    async def add_note(
+        note_request: NoteRequest,
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
         """Add a new note"""
         global lecture_streamer
         
@@ -2240,92 +2193,206 @@ try:
             raise HTTPException(status_code=400, detail="No lecture streamer available")
         
         try:
-            note = lecture_streamer.add_note(note_request.content)
-            return {
-                "status": "success",
-                "message": "Note added successfully",
-                "note": note
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Get current lecture section if available
+            current_section = getattr(lecture_streamer, 'current_lecture_section', None)
+            lecture_section = note_request.lecture_section if note_request.lecture_section else current_section
+            
+            # Save note to database
+            note_data = {
+                "user_id": user_data.id,
+                "content": note_request.content,
+                "lecture_type": "physics_waves_level1",
+                "lecture_section": lecture_section,
+                "lecture_timestamp": datetime.now().isoformat()
             }
+            
+            print(f"📝 [Lecture] Adding note: {note_data}")
+            result = supabase_service.table("user_notes").insert(note_data).execute()
+            print(f"📋 [Lecture] Database result: {result}")
+            
+            if result.data:
+                return {
+                    "status": "success",
+                    "message": "Note added successfully",
+                    "note": result.data[0]
+                }
+            else:
+                raise HTTPException(status_code=500, detail="Failed to save note")
+                
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error adding note: {str(e)}")
     
     @router.get("/notes")
-    async def get_notes():
-        """Get all notes"""
-        global lecture_streamer
-        
-        if not lecture_streamer:
-            raise HTTPException(status_code=400, detail="No lecture streamer available")
-        
+    async def get_notes(
+        section: str = None,
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
+        """Get all notes for the current user, optionally filtered by section"""
         try:
-            notes_data = lecture_streamer.get_notes()
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Build query
+            query = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True)
+            
+            # Add section filter if provided
+            if section:
+                query = query.eq("lecture_section", section)
+            
+            result = query.order("created_at", desc=True).execute()
+            
             return {
                 "status": "success",
-                "data": notes_data
+                "data": {
+                    "notes": result.data if result.data else [],
+                    "total_notes": len(result.data) if result.data else 0,
+                    "user_id": user_data.id,
+                    "filtered_by_section": section
+                }
             }
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error getting notes: {str(e)}")
     
-    @router.put("/notes/update")
-    async def update_note(note_update: NoteUpdateRequest):
-        """Update an existing note"""
-        global lecture_streamer
-        
-        if not lecture_streamer:
-            raise HTTPException(status_code=400, detail="No lecture streamer available")
-        
+    @router.get("/notes/by-sections")
+    async def get_notes_by_sections(
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
+        """Get user's notes organized by lecture sections"""
         try:
-            updated_note = lecture_streamer.update_note(note_update.note_id, note_update.content)
-            if updated_note:
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Get user's notes for this lecture type
+            result = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True).order("created_at", desc=True).execute()
+            
+            # Organize notes by section
+            notes_by_section = {}
+            total_notes = 0
+            
+            if result.data:
+                for note in result.data:
+                    section = note.get('lecture_section', 'general')
+                    if section not in notes_by_section:
+                        notes_by_section[section] = []
+                    notes_by_section[section].append(note)
+                    total_notes += 1
+            
+            return {
+                "status": "success",
+                "data": {
+                    "notes_by_section": notes_by_section,
+                    "total_notes": total_notes,
+                    "sections": list(notes_by_section.keys()),
+                    "user_id": user_data.id
+                }
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error getting notes by sections: {str(e)}")
+    
+    @router.put("/notes/update")
+    async def update_note(
+        note_update: NoteUpdateRequest,
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
+        """Update an existing note"""
+        try:
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Update note in database (RLS will ensure user can only update their own notes)
+            result = supabase_service.table("user_notes").update({
+                "content": note_update.content,
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", note_update.note_id).eq("user_id", user_data.id).execute()
+            
+            if result.data:
                 return {
                     "status": "success",
                     "message": "Note updated successfully",
-                    "note": updated_note
+                    "note": result.data[0]
                 }
             else:
-                raise HTTPException(status_code=404, detail="Note not found")
+                raise HTTPException(status_code=404, detail="Note not found or you don't have permission to update it")
+                
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error updating note: {str(e)}")
     
     @router.delete("/notes/delete")
-    async def delete_note(note_delete: NoteDeleteRequest):
-        """Delete a note"""
-        global lecture_streamer
-        
-        if not lecture_streamer:
-            raise HTTPException(status_code=400, detail="No lecture streamer available")
-        
+    async def delete_note(
+        note_delete: NoteDeleteRequest,
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
+        """Delete a note (soft delete)"""
         try:
-            deleted_note = lecture_streamer.delete_note(note_delete.note_id)
-            if deleted_note:
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Soft delete note in database (RLS will ensure user can only delete their own notes)
+            result = supabase_service.table("user_notes").update({
+                "is_active": False,
+                "updated_at": datetime.now().isoformat()
+            }).eq("id", note_delete.note_id).eq("user_id", user_data.id).execute()
+            
+            if result.data:
                 return {
                     "status": "success",
                     "message": "Note deleted successfully",
-                    "deleted_note": deleted_note
+                    "deleted_note": result.data[0]
                 }
             else:
-                raise HTTPException(status_code=404, detail="Note not found")
+                raise HTTPException(status_code=404, detail="Note not found or you don't have permission to delete it")
+                
         except HTTPException:
             raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error deleting note: {str(e)}")
     
     @router.post("/notes/clear")
-    async def clear_notes():
-        """Clear all notes"""
-        global lecture_streamer
-        
-        if not lecture_streamer:
-            raise HTTPException(status_code=400, detail="No lecture streamer available")
-        
+    async def clear_notes(
+        token_data: TokenData = Depends(get_current_user_token)
+    ):
+        """Clear all notes for the current user"""
         try:
-            lecture_streamer.clear_notes()
+            # Get user data
+            user_data = await get_current_user_data(token_data)
+            if not user_data:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Soft delete all user's notes for this lecture type
+            result = supabase_service.table("user_notes").update({
+                "is_active": False,
+                "updated_at": datetime.now().isoformat()
+            }).eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True).execute()
+            
+            notes_cleared = len(result.data) if result.data else 0
+            
             return {
                 "status": "success",
-                "message": "All notes cleared successfully"
+                "message": f"All {notes_cleared} notes cleared successfully"
             }
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error clearing notes: {str(e)}")
     

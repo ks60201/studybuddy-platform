@@ -1,13 +1,16 @@
-/* Extraordinary 3D Library Interface */
+/* Extraordinary 3D Library Interface - Dark Theme */
 .library-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(to bottom, #030014, #0f1225);
   position: relative;
   padding: 2rem;
   padding-top: 8rem;
   font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-x: hidden;
+  /* Optimize scrolling performance */
+  transform: translateZ(0);
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Floating Particles */
@@ -1008,6 +1011,10 @@
   justify-content: center;
   padding: 2rem;
   position: relative;
+  /* Optimize for smooth scrolling */
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .book-pages {
@@ -1016,6 +1023,11 @@
   height: 600px;
   position: relative;
   perspective: 1000px;
+  /* Prevent scroll flicker - disable GPU layer for scrollable content */
+  transform: none;
+  will-change: auto;
+  /* Force CPU rendering for stable scrolling */
+  contain: layout;
 }
 
 .book-page {
@@ -1030,16 +1042,36 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   transform-origin: left center;
   transition: transform 0.3s ease;
-  overflow-y: auto;
+  overflow-y: hidden;
   color: white;
+  /* Ultra-aggressive anti-flicker fixes */
+  transform: none !important;
+  will-change: auto;
+  -webkit-overflow-scrolling: auto;
+  backface-visibility: visible;
+  -webkit-transform: none !important;
+  -webkit-backface-visibility: visible;
+  /* Force stable CPU rendering */
+  contain: layout;
+  isolation: auto;
+  /* Disable hardware acceleration for scroll container */
+  -webkit-perspective: none;
+  perspective: none;
+  /* No scrollbar needed */
 }
 
 .page-turn-left {
-  transform: rotateY(-90deg);
+  transform: rotateY(-90deg) !important;
+  overflow: hidden !important;
+  /* Re-enable GPU for animation only */
+  will-change: transform;
 }
 
 .page-turn-right {
-  transform: rotateY(90deg);
+  transform: rotateY(90deg) !important;
+  overflow: hidden !important;
+  /* Re-enable GPU for animation only */
+  will-change: transform;
 }
 
 .book-navigation {
@@ -1106,7 +1138,7 @@
 
 /* Enhanced Book Pages */
 .cover-page {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1e293b, #334155);
   color: white;
   display: flex;
   align-items: center;
@@ -1216,7 +1248,7 @@
 }
 
 .toc-page {
-  background: #2a2a2a;
+  background: rgba(15, 23, 42, 0.95);
   color: white;
 }
 
@@ -1224,7 +1256,7 @@
   font-size: 1.8rem;
   font-weight: 600;
   margin-bottom: 2rem;
-  color: #667eea;
+  color: #60a5fa;
   text-align: center;
 }
 
@@ -1239,18 +1271,19 @@
   justify-content: space-between;
   padding: 1rem;
   margin-bottom: 0.5rem;
-  background: #3a3a3a;
+  background: rgba(30, 41, 59, 0.6);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  border: 1px solid #404040;
+  border: 1px solid rgba(99, 102, 241, 0.2);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .toc-item:hover {
-  background: #4a4a4a;
+  background: rgba(30, 41, 59, 0.8);
+  border-color: #60a5fa;
   transform: translateX(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .toc-item-content {
@@ -1285,14 +1318,14 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  background: linear-gradient(90deg, #60a5fa, #8b5cf6);
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .page-number {
   font-weight: 600;
-  color: #667eea;
+  color: #60a5fa;
   min-width: 30px;
   text-align: right;
 }
@@ -1304,7 +1337,7 @@
 }
 
 .qa-section {
-  background: linear-gradient(135deg, #667eea, #764ba2) !important;
+  background: linear-gradient(135deg, #60a5fa, #8b5cf6) !important;
   color: white;
 }
 
@@ -1317,7 +1350,7 @@
 }
 
 .content-page {
-  background: #2a2a2a;
+  background: rgba(15, 23, 42, 0.95);
   color: white;
 }
 
@@ -1340,7 +1373,7 @@
 .page-header h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #667eea;
+  color: #60a5fa;
   margin: 0;
 }
 
@@ -1373,22 +1406,22 @@
 }
 
 .page-actions .action-btn {
-  background: rgba(102, 126, 234, 0.1);
-  border: 1px solid rgba(102, 126, 234, 0.2);
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 6px;
-  color: #667eea;
+  color: #60a5fa;
   padding: 0.5rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .page-actions .action-btn:hover {
-  background: rgba(102, 126, 234, 0.2);
+  background: rgba(96, 165, 250, 0.2);
   transform: scale(1.1);
 }
 
 .qa-page {
-  background: #2a2a2a;
+  background: rgba(15, 23, 42, 0.95);
   color: white;
 }
 
@@ -1745,3 +1778,135 @@
     font-size: 0.8rem;
   }
 }
+
+/* FORCE HIDE ALL SCROLLBARS - AGGRESSIVE */
+.book-page::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.book-page::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.book-page::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.book-page::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+.book-page {
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  scrollbar-width: none !important; /* Firefox */
+  overflow: hidden !important; /* FORCE NO SCROLLING */
+}
+
+/* AGGRESSIVELY HIDE ALL SCROLLBARS EVERYWHERE */
+.content-page::-webkit-scrollbar,
+.qa-page::-webkit-scrollbar,
+.toc-page::-webkit-scrollbar,
+.cover-page::-webkit-scrollbar,
+.book-pages::-webkit-scrollbar,
+.book-container::-webkit-scrollbar,
+.library-container::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.content-page::-webkit-scrollbar-track,
+.qa-page::-webkit-scrollbar-track,
+.toc-page::-webkit-scrollbar-track,
+.cover-page::-webkit-scrollbar-track,
+.book-pages::-webkit-scrollbar-track,
+.book-container::-webkit-scrollbar-track,
+.library-container::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.content-page::-webkit-scrollbar-thumb,
+.qa-page::-webkit-scrollbar-thumb,
+.toc-page::-webkit-scrollbar-thumb,
+.cover-page::-webkit-scrollbar-thumb,
+.book-pages::-webkit-scrollbar-thumb,
+.book-container::-webkit-scrollbar-thumb,
+.library-container::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.content-page,
+.qa-page,
+.toc-page,
+.cover-page,
+.book-pages,
+.book-container,
+.library-container {
+  -ms-overflow-style: none !important; /* Internet Explorer 10+ */
+  scrollbar-width: none !important; /* Firefox */
+  overflow: hidden !important; /* FORCE NO SCROLLING ANYWHERE */
+}
+
+/* Additional Performance Optimizations */
+.book-page.page-turn-left,
+.book-page.page-turn-right {
+  /* Disable scrolling during page turn animations */
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Anti-Flicker Global Rules */
+.book-page * {
+  /* Disable problematic properties that can cause scroll flicker */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Disable smooth scrolling behavior that can cause flicker */
+.book-page {
+  scroll-behavior: auto !important;
+}
+
+/* NUCLEAR OPTION - HIDE ALL SCROLLBARS GLOBALLY */
+* {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE and Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+*::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+*::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+*::-webkit-scrollbar-corner {
+  display: none !important;
+}
+
+/* Force all containers to have no overflow */
+.book-page,
+.content-page,
+.qa-page,
+.toc-page,
+.cover-page,
+.book-pages,
+.book-container,
+.library-container {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+/* Scrollbar completely disabled - DONE */

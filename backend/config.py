@@ -11,6 +11,9 @@ SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 # Initialize Supabase client
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Initialize service role client for authenticated operations (bypasses RLS)
+supabase_service: Client = create_client(SUPABASE_URL, SERVICE_ROLE_KEY)
+
 # JWT configuration
 SECRET_KEY = "ai-study-buddy-secret-key-2024-super-secure-jwt-token-signing-key"
 ALGORITHM = "HS256"

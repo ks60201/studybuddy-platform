@@ -2,12 +2,12 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Users,
   BookOpen,
-  HelpCircle,
   FileText,
   LogIn,
   UserPlus,
   LogOut,
   Brain,
+  StickyNote,
 } from "lucide-react";
 import { AUTH_TOKEN_KEY } from "../config";
 
@@ -48,6 +48,10 @@ const Navbar = ({ user, onLogout }: NavbarProps) => {
           <Link to="/ai-doubt-solver" className="navbar-link neo-link">
             <Brain size={18} />
             <span>Doubt Solver</span>
+          </Link>
+          <Link to="/notes" className="navbar-link neo-link">
+            <StickyNote size={18} />
+            <span>Notes</span>
           </Link>
           <Link to="/revision-cards" className="navbar-link neo-link">
             <FileText size={18} />

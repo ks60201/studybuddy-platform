@@ -224,15 +224,19 @@
 /* Floating Toolbar */
 .floating-toolbar {
   position: fixed;
-  background: rgba(15, 23, 42, 0.95);
+  background: rgba(15, 23, 42, 0.98);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 8px;
   padding: 6px;
   display: flex;
   gap: 4px;
-  z-index: 1000;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  z-index: 1050;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+  pointer-events: auto;
+  top: auto;
+  left: auto;
+  transform: translateY(-45px);
 }
 
 .floating-toolbar .toolbar-btn {
@@ -254,17 +258,18 @@
 
 /* Slash Menu */
 .slash-menu {
-  background: rgba(15, 23, 42, 0.95);
+  background: rgba(15, 23, 42, 0.98);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(59, 130, 246, 0.3);
   border-radius: 12px;
   padding: 8px;
   min-width: 280px;
   max-width: 320px;
-  z-index: 1001;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  z-index: 1060;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   max-height: 300px;
   overflow-y: auto;
+  pointer-events: auto;
 }
 
 .slash-menu-header {

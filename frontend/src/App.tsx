@@ -40,6 +40,7 @@ import FlashcardPage from "./classes/Class7/Science/Physics/Waves/Level1/Flashca
 import QuizPage from "./classes/Class7/Science/Physics/Waves/Level1/QuizPage";
 import AiDoubtSolverChatbox from "./components/AiDoubtSolverChatbox";
 import RevisionBook from "./components/RevisionBook";
+import NotesPage from "./components/NotesPage";
 import "./App.css";
 
 function App() {
@@ -298,6 +299,7 @@ function App() {
               </div>
             }
           />
+          <Route path="/notes" element={<NotesPage />} />
           <Route path="/revision-cards" element={<RevisionBook />} />
           <Route
             path="/ai-quiz"

@@ -5,16 +5,24 @@ import "./NotesManager.css";
 
 interface Note {
   id: string;
-  title: string;
   content: string;
-  timestamp: string;
-  section: string;
-  section_index: number;
-  updated_at?: string;
-  folder: string;
-  tags: string[];
-  isPinned: boolean;
-  color: string;
+  lecture_type: string;
+  lecture_section: string;
+  note_timestamp: string;
+  lecture_timestamp: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  // Legacy fields for backward compatibility
+  title?: string;
+  timestamp?: string;
+  section?: string;
+  section_index?: number;
+  folder?: string;
+  tags?: string[];
+  isPinned?: boolean;
+  color?: string;
 }
 
 interface Folder {
@@ -28,10 +36,11 @@ interface Folder {
 interface NotesManagerProps {
   isOpen: boolean;
   onClose: () => void;
-  onPause: () => Promise<void>;
-  onResume: () => Promise<void>;
+  onPause?: () => Promise<void>;
+  onResume?: () => Promise<void>;
   API_BASE_URL: string;
   API_ENDPOINT: string;
+  standalone?: boolean; // New prop to indicate standalone mode
 }
 
 const NotesManager: React.FC<NotesManagerProps> = ({
@@ -41,12 +50,13 @@ const NotesManager: React.FC<NotesManagerProps> = ({
   onResume,
   API_BASE_URL,
   API_ENDPOINT,
+  standalone = false,
 }) => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [currentNote, setCurrentNote] = useState<string>("");
   const [currentTitle, setCurrentTitle] = useState<string>("");
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  // const [editingNoteId, setEditingNoteId] = useState<string | null>(null); // Removed for now
   const [selectedFolder, setSelectedFolder] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -138,11 +148,13 @@ const NotesManager: React.FC<NotesManagerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      handlePauseForNotes();
+      if (!standalone && onPause) {
+        handlePauseForNotes();
+      }
       fetchNotes();
       fetchFolders();
     }
-  }, [isOpen]);
+  }, [isOpen, standalone]);
 
   // Calculate note counts for folders
   useEffect(() => {
@@ -157,13 +169,14 @@ const NotesManager: React.FC<NotesManagerProps> = ({
   }, [notes]);
 
   const handleClose = async () => {
-    if (isPaused) {
+    if (!standalone && isPaused && onResume) {
       await handleResumeFromNotes();
     }
     onClose();
   };
 
   const handlePauseForNotes = async () => {
+    if (!onPause) return;
     try {
       await onPause();
       setIsPaused(true);
@@ -174,6 +187,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
   };
 
   const handleResumeFromNotes = async () => {
+    if (!onResume) return;
     try {
       await onResume();
       setIsPaused(false);
@@ -183,30 +197,74 @@ const NotesManager: React.FC<NotesManagerProps> = ({
     }
   };
 
-  const fetchNotes = () => {
+  const fetchNotes = async () => {
     try {
-      const savedNotes = localStorage.getItem("lecture_notes");
-      if (savedNotes) {
-        const parsedNotes = JSON.parse(savedNotes);
-        // Ensure all notes have required properties
-        const notesWithDefaults = parsedNotes.map((note: any) => ({
-          id: note.id || `note_${Date.now()}_${Math.random()}`,
-          title: note.title || "Untitled Note",
-          content: note.content || "",
-          timestamp: note.timestamp || new Date().toISOString(),
-          section: note.section || "Current Section",
-          section_index: note.section_index || 0,
-          updated_at: note.updated_at,
-          folder: note.folder || "quick",
-          tags: note.tags || [],
-          isPinned: note.isPinned || false,
-          color: note.color || noteColors[0],
+      setIsLoading(true);
+
+      // Get auth token
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setError("Please log in to view your notes");
+        return;
+      }
+
+      // Use different endpoint based on mode
+      const endpoint = standalone
+        ? `${API_BASE_URL}/api/notes` // Use general notes API for standalone
+        : `${API_BASE_URL}${API_ENDPOINT}/notes`;
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Please log in to view your notes");
+          return;
+        }
+        throw new Error(`Failed to fetch notes: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.status === "success" && result.data.notes) {
+        // Convert API notes to component format
+        const apiNotes = result.data.notes.map((note: any) => ({
+          ...note,
+          // Add legacy fields for compatibility
+          title:
+            note.content.substring(0, 50) +
+            (note.content.length > 50 ? "..." : ""),
+          timestamp: note.created_at,
+          section: note.lecture_section || "General",
+          section_index: 0,
+          folder: note.lecture_section ? "physics" : "quick",
+          tags: [],
+          isPinned: false,
+          color: noteColors[Math.floor(Math.random() * noteColors.length)],
         }));
-        setNotes(notesWithDefaults);
+
+        setNotes(apiNotes);
       }
     } catch (error) {
       console.error("Error fetching notes:", error);
       setError("Failed to load notes");
+
+      // Fallback to localStorage for backward compatibility
+      try {
+        const savedNotes = localStorage.getItem("lecture_notes");
+        if (savedNotes) {
+          const parsedNotes = JSON.parse(savedNotes);
+          setNotes(parsedNotes);
+        }
+      } catch (localError) {
+        console.error("Error loading local notes:", localError);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -226,82 +284,258 @@ const NotesManager: React.FC<NotesManagerProps> = ({
   };
 
   const handleAddNote = async () => {
-    if (!currentNote.trim() && !currentTitle.trim()) return;
+    if (!currentNote.trim()) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const newNote: Note = {
-        id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        title: currentTitle.trim() || "Untitled Note",
-        content: currentNote.trim(),
-        timestamp: new Date().toISOString(),
-        section: "Current Section",
-        section_index: 0,
-        folder: selectedFolder === "all" ? "quick" : selectedFolder,
-        tags: [],
-        isPinned: false,
-        color: noteColors[Math.floor(Math.random() * noteColors.length)],
+      // Get auth token
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setError("Please log in to save notes");
+        return;
+      }
+
+      // Prepare note content (combine title and content if title exists)
+      const noteContent = currentTitle.trim()
+        ? `${currentTitle.trim()}\n\n${currentNote.trim()}`
+        : currentNote.trim();
+
+      const addEndpoint = standalone
+        ? `${API_BASE_URL}/api/notes/add`
+        : `${API_BASE_URL}${API_ENDPOINT}/notes/add`;
+
+      const requestBody = {
+        content: noteContent,
+        lecture_section: selectedFolder === "all" ? "" : selectedFolder,
+        lecture_type: standalone ? "general" : "physics_waves_level1",
       };
 
-      const updatedNotes = [...notes, newNote];
-      setNotes(updatedNotes);
-      localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
+      console.log("📝 Adding note:", {
+        endpoint: addEndpoint,
+        body: requestBody,
+        standalone,
+      });
 
-      setCurrentNote("");
-      setCurrentTitle("");
+      const response = await fetch(addEndpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Please log in to save notes");
+          return;
+        }
+        const errorText = await response.text();
+        console.error("❌ Add note error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        });
+        throw new Error(
+          `Failed to add note: ${response.status} - ${errorText}`
+        );
+      }
+
+      const result = await response.json();
+
+      if (result.status === "success") {
+        // Refresh notes list
+        await fetchNotes();
+        setCurrentNote("");
+        setCurrentTitle("");
+      } else {
+        throw new Error(result.message || "Failed to add note");
+      }
     } catch (error) {
       console.error("Error adding note:", error);
       setError("Failed to add note");
+
+      // Fallback to localStorage
+      try {
+        const newNote: Note = {
+          id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          content: currentNote.trim(),
+          lecture_type: "physics_waves_level1",
+          lecture_section:
+            selectedFolder === "all" ? "general" : selectedFolder,
+          note_timestamp: new Date().toISOString(),
+          lecture_timestamp: new Date().toISOString(),
+          is_active: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_id: "local",
+          title: currentTitle.trim() || "Untitled Note",
+          timestamp: new Date().toISOString(),
+          section: "Current Section",
+          section_index: 0,
+          folder: selectedFolder === "all" ? "quick" : selectedFolder,
+          tags: [],
+          isPinned: false,
+          color: noteColors[Math.floor(Math.random() * noteColors.length)],
+        };
+
+        const updatedNotes = [...notes, newNote];
+        setNotes(updatedNotes);
+        localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
+        setCurrentNote("");
+        setCurrentTitle("");
+      } catch (localError) {
+        console.error("Error with local fallback:", localError);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Temporarily disabled - will be implemented later
+  /*
   const handleUpdateNote = async (
     noteId: string,
     newTitle: string,
     newContent: string
   ) => {
-    if (!newContent.trim() && !newTitle.trim()) return;
+    if (!newContent.trim()) return;
 
     setIsLoading(true);
     setError(null);
 
     try {
-      const updatedNotes = notes.map((note) =>
-        note.id === noteId
-          ? {
-              ...note,
-              title: newTitle.trim() || "Untitled Note",
-              content: newContent.trim(),
-              updated_at: new Date().toISOString(),
-            }
-          : note
-      );
+      // Get auth token
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setError("Please log in to update notes");
+        return;
+      }
 
-      setNotes(updatedNotes);
-      localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
-      setEditingNoteId(null);
+      // Prepare note content (combine title and content if title exists)
+      const noteContent = newTitle.trim() 
+        ? `${newTitle.trim()}\n\n${newContent.trim()}`
+        : newContent.trim();
+
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINT}/notes/update`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          note_id: noteId,
+          content: noteContent,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Please log in to update notes");
+          return;
+        }
+        throw new Error(`Failed to update note: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.status === "success") {
+        // Refresh notes list
+        await fetchNotes();
+        // setEditingNoteId(null); // Commented out for now
+      } else {
+        throw new Error(result.message || "Failed to update note");
+      }
     } catch (error) {
       console.error("Error updating note:", error);
       setError("Failed to update note");
+      
+      // Fallback to localStorage
+      try {
+        const updatedNotes = notes.map((note) =>
+          note.id === noteId
+            ? {
+                ...note,
+                title: newTitle.trim() || "Untitled Note",
+                content: newContent.trim(),
+                updated_at: new Date().toISOString(),
+              }
+            : note
+        );
+
+        setNotes(updatedNotes);
+        localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
+        // setEditingNoteId(null); // Commented out for now
+      } catch (localError) {
+        console.error("Error with local fallback:", localError);
+      }
     } finally {
       setIsLoading(false);
     }
   };
+  */
 
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm("Are you sure you want to delete this note?")) return;
 
+    setIsLoading(true);
+    setError(null);
+
     try {
-      const updatedNotes = notes.filter((note) => note.id !== noteId);
-      setNotes(updatedNotes);
-      localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
+      // Get auth token
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setError("Please log in to delete notes");
+        return;
+      }
+
+      const deleteEndpoint = standalone
+        ? `${API_BASE_URL}/api/notes/delete`
+        : `${API_BASE_URL}${API_ENDPOINT}/notes/delete`;
+
+      const response = await fetch(deleteEndpoint, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          note_id: noteId,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError("Please log in to delete notes");
+          return;
+        }
+        throw new Error(`Failed to delete note: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.status === "success") {
+        // Refresh notes list
+        await fetchNotes();
+      } else {
+        throw new Error(result.message || "Failed to delete note");
+      }
     } catch (error) {
       console.error("Error deleting note:", error);
       setError("Failed to delete note");
+
+      // Fallback to localStorage
+      try {
+        const updatedNotes = notes.filter((note) => note.id !== noteId);
+        setNotes(updatedNotes);
+        localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
+      } catch (localError) {
+        console.error("Error with local fallback:", localError);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -313,6 +547,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
     localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
   };
 
+  /*
   const handleMoveNote = (noteId: string, newFolder: string) => {
     const updatedNotes = notes.map((note) =>
       note.id === noteId ? { ...note, folder: newFolder } : note
@@ -320,6 +555,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
     setNotes(updatedNotes);
     localStorage.setItem("lecture_notes", JSON.stringify(updatedNotes));
   };
+  */
 
   const handleCreateFolder = () => {
     if (!newFolderName.trim()) return;
@@ -349,30 +585,39 @@ const NotesManager: React.FC<NotesManagerProps> = ({
   // Filter and sort notes
   const filteredNotes = notes
     .filter((note) => {
-      if (selectedFolder !== "all" && note.folder !== selectedFolder)
+      if (
+        selectedFolder !== "all" &&
+        (note.folder || note.lecture_section) !== selectedFolder
+      )
         return false;
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
-          note.title.toLowerCase().includes(query) ||
+          (note.title || "").toLowerCase().includes(query) ||
           note.content.toLowerCase().includes(query) ||
-          note.tags.some((tag) => tag.toLowerCase().includes(query))
+          (note.tags || []).some((tag) => tag.toLowerCase().includes(query))
         );
       }
       return true;
     })
     .sort((a, b) => {
-      if (a.isPinned !== b.isPinned) return b.isPinned ? 1 : -1;
+      if ((a.isPinned || false) !== (b.isPinned || false))
+        return b.isPinned || false ? 1 : -1;
 
       switch (sortBy) {
         case "title":
-          return a.title.localeCompare(b.title);
+          return (a.title || a.content.substring(0, 50)).localeCompare(
+            b.title || b.content.substring(0, 50)
+          );
         case "folder":
-          return a.folder.localeCompare(b.folder);
+          return (a.folder || a.lecture_section || "").localeCompare(
+            b.folder || b.lecture_section || ""
+          );
         case "date":
         default:
           return (
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            new Date(b.created_at || b.timestamp || new Date()).getTime() -
+            new Date(a.created_at || a.timestamp || new Date()).getTime()
           );
       }
     });
@@ -400,9 +645,9 @@ const NotesManager: React.FC<NotesManagerProps> = ({
             <div className="header-left">
               <h2 className="notes-title">
                 <span className="notes-icon">📚</span>
-                Smart Notes
+                {standalone ? "My Notes" : "Smart Notes"}
               </h2>
-              {isPaused && (
+              {!standalone && isPaused && (
                 <span className="pause-indicator">
                   <span className="pause-icon">⏸️</span>
                   Lecture Paused
@@ -571,7 +816,11 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                       layout
                     >
                       <div className="note-card-header">
-                        <h4 className="note-card-title">{note.title}</h4>
+                        <h4 className="note-card-title">
+                          {note.title ||
+                            note.content.substring(0, 50) +
+                              (note.content.length > 50 ? "..." : "")}
+                        </h4>
                         <div className="note-actions">
                           <button
                             onClick={() => handlePinNote(note.id)}
@@ -582,6 +831,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                           >
                             📌
                           </button>
+                          {/* Temporarily disabled edit functionality
                           <button
                             onClick={() => setEditingNoteId(note.id)}
                             className="edit-btn"
@@ -589,6 +839,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                           >
                             ✏️
                           </button>
+                          */}
                           <button
                             onClick={() => handleDeleteNote(note.id)}
                             className="delete-btn"
@@ -608,13 +859,13 @@ const NotesManager: React.FC<NotesManagerProps> = ({
 
                       <div className="note-card-footer">
                         <span className="note-folder">
-                          {folders.find((f) => f.id === note.folder)?.icon ||
-                            "📁"}
-                          {folders.find((f) => f.id === note.folder)?.name ||
-                            note.folder}
+                          {note.lecture_section ? "📚" : "📁"}
+                          {note.lecture_section || note.folder || "General"}
                         </span>
                         <span className="note-timestamp">
-                          {new Date(note.timestamp).toLocaleDateString()}
+                          {new Date(
+                            note.created_at || note.timestamp || new Date()
+                          ).toLocaleDateString()}
                         </span>
                       </div>
                     </motion.div>

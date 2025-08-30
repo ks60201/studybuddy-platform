@@ -23,6 +23,8 @@ interface PostCardProps {
   onVote: (postId: string, voteType: "upvote" | "downvote") => void;
   onCommentAdded: () => void;
   onPostClick: (postId: string) => void;
+  animationDelay?: number;
+  viewMode?: "grid" | "list";
 }
 
 const PostCard: React.FC<PostCardProps> = ({
@@ -30,6 +32,8 @@ const PostCard: React.FC<PostCardProps> = ({
   onVote,
   onCommentAdded,
   onPostClick,
+  animationDelay = 0,
+  viewMode = "grid",
 }) => {
   const [showComments, setShowComments] = useState(false);
 
@@ -58,7 +62,12 @@ const PostCard: React.FC<PostCardProps> = ({
   };
 
   return (
-    <div className="post-card">
+    <div
+      className={`post-card ${viewMode}-view`}
+      style={{
+        animationDelay: `${animationDelay}s`,
+      }}
+    >
       <div className="post-header">
         <div className="author-info">
           <div className="author-avatar">

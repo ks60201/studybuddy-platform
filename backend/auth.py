@@ -144,15 +144,21 @@ async def login(user_credentials: UserLogin):
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_data(token_data: TokenData = Depends(get_current_user_token)):
     try:
+        print(f"🔍 Looking up user with email: {token_data.email}")
         result = supabase.table("users").select("*").eq("email", token_data.email).execute()
         
+        print(f"👤 User lookup result: {result.data}")
+        
         if not result.data:
+            print(f"❌ No user found with email: {token_data.email}")
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         
         user = result.data[0]
+        print(f"✅ User found: {user.get('id', 'no-id')} - {user.get('email', 'no-email')}")
         return UserResponse(**user)
         
     except Exception as e:
+        print(f"❌ Exception in get_current_user_data: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to get user data: {str(e)}")
 
 @router.get("/test-token")

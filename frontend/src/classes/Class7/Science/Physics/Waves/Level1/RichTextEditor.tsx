@@ -28,6 +28,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [showToolbar, setShowToolbar] = useState(false);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashMenuPosition, setSlashMenuPosition] = useState({ x: 0, y: 0 });
+  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
   const [selectedText, setSelectedText] = useState("");
 
   // Format buttons like Notion
@@ -132,16 +133,37 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     }
   }, [autoFocus]);
 
+  // Initialize editor content when value changes externally
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value;
+    }
+  }, [value]);
+
   // Handle text selection for toolbar
   const handleSelectionChange = () => {
-    const selection = window.getSelection();
-    if (selection && selection.toString().length > 0) {
-      setSelectedText(selection.toString());
-      setShowToolbar(true);
-    } else {
-      setSelectedText("");
-      setShowToolbar(false);
-    }
+    setTimeout(() => {
+      const selection = window.getSelection();
+      if (
+        selection &&
+        selection.toString().length > 0 &&
+        editorRef.current?.contains(selection.anchorNode)
+      ) {
+        setSelectedText(selection.toString());
+
+        // Calculate toolbar position
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        setToolbarPosition({
+          x: rect.left + rect.width / 2,
+          y: rect.top + window.scrollY,
+        });
+        setShowToolbar(true);
+      } else {
+        setSelectedText("");
+        setShowToolbar(false);
+      }
+    }, 10);
   };
 
   // Handle keyboard shortcuts
@@ -162,8 +184,18 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       }, 0);
     }
 
-    // Hide slash menu on other keys
-    if (e.key !== "/" && showSlashMenu) {
+    // Hide slash menu on Escape or other navigation keys
+    if (
+      (e.key === "Escape" || e.key === "ArrowUp" || e.key === "ArrowDown") &&
+      showSlashMenu
+    ) {
+      e.preventDefault();
+      setShowSlashMenu(false);
+      return;
+    }
+
+    // Hide slash menu on other keys (except typing)
+    if (e.key !== "/" && !e.key.match(/^[a-zA-Z0-9]$/) && showSlashMenu) {
       setShowSlashMenu(false);
     }
 
@@ -214,8 +246,21 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Execute formatting commands
   const execCommand = (command: string, value?: string) => {
-    document.execCommand(command, false, value);
-    updateContent();
+    try {
+      // Focus the editor before executing command
+      if (editorRef.current) {
+        editorRef.current.focus();
+      }
+
+      const success = document.execCommand(command, false, value);
+      if (success) {
+        updateContent();
+      } else {
+        console.warn(`Failed to execute command: ${command}`);
+      }
+    } catch (error) {
+      console.error(`Error executing command ${command}:`, error);
+    }
   };
 
   // Toggle inline code
@@ -243,42 +288,48 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Handle slash command selection
   const handleSlashCommand = (command: string) => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
+    try {
+      const selection = window.getSelection();
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
 
-      // Remove the slash
-      range.setStart(range.startContainer, range.startOffset - 1);
-      range.deleteContents();
+        // Remove the slash
+        range.setStart(range.startContainer, range.startOffset - 1);
+        range.deleteContents();
 
-      switch (command) {
-        case "h1":
-        case "h2":
-        case "h3":
-          execCommand("formatBlock", command);
-          break;
-        case "quote":
-          execCommand("formatBlock", "blockquote");
-          break;
-        case "ul":
-          execCommand("insertUnorderedList");
-          break;
-        case "ol":
-          execCommand("insertOrderedList");
-          break;
-        case "code":
-          insertCodeBlock();
-          break;
-        case "divider":
-          insertDivider();
-          break;
-        case "todo":
-          insertTodoList();
-          break;
-        case "table":
-          insertTable();
-          break;
+        switch (command) {
+          case "h1":
+          case "h2":
+          case "h3":
+            execCommand("formatBlock", command);
+            break;
+          case "quote":
+            execCommand("formatBlock", "blockquote");
+            break;
+          case "ul":
+            execCommand("insertUnorderedList");
+            break;
+          case "ol":
+            execCommand("insertOrderedList");
+            break;
+          case "code":
+            insertCodeBlock();
+            break;
+          case "divider":
+            insertDivider();
+            break;
+          case "todo":
+            insertTodoList();
+            break;
+          case "table":
+            insertTable();
+            break;
+          default:
+            console.warn(`Unknown slash command: ${command}`);
+        }
       }
+    } catch (error) {
+      console.error(`Error handling slash command ${command}:`, error);
     }
     setShowSlashMenu(false);
   };
@@ -364,10 +415,14 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     updateContent();
   };
 
-  // Update content
+  // Update content with debounce to prevent excessive re-renders
   const updateContent = () => {
     if (editorRef.current) {
-      onChange(editorRef.current.innerHTML);
+      const content = editorRef.current.innerHTML;
+      // Only update if content actually changed
+      if (content !== value) {
+        onChange(content);
+      }
     }
   };
 
@@ -382,6 +437,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       {showToolbar && selectedText && (
         <motion.div
           className="floating-toolbar"
+          style={{
+            position: "fixed",
+            left: toolbarPosition.x,
+            top: toolbarPosition.y - 50,
+            transform: "translateX(-50%)",
+          }}
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
@@ -444,9 +505,9 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
         onKeyDown={handleKeyDown}
         onMouseUp={handleSelectionChange}
         onKeyUp={handleSelectionChange}
+        onBlur={() => setShowToolbar(false)}
         style={{ minHeight }}
         data-placeholder={placeholder}
-        dangerouslySetInnerHTML={{ __html: value }}
       />
 
       {/* Format Toolbar */}
