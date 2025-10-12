@@ -48,8 +48,8 @@ async def get_current_user(token: HTTPAuthorizationCredentials = Depends(securit
         )
 
 # Configuration
-GEMINI_API_KEY = "AIzaSyCgPs-85H5nWxxuJoC8aCs4EwfZUjBTsxQ"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_API_KEY = "AIzaSyCBI-2UyqWJg6mMpG10NB_QfUVKgknNS5g"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent"
 RATE_LIMIT_PER_MINUTE = 60
 CACHE_DURATION_MINUTES = 30
 

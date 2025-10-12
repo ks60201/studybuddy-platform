@@ -96,79 +96,79 @@ interface KeywordAnimation {
   color: string;
 }
 
-const PhysicsWavesLevel1: React.FC = () => {
-  // NEW: Teacher Profile for Physics Waves
+const AlgebraLevel1: React.FC = () => {
+  // NEW: Teacher Profile for Mathematics Algebra
   const teacherProfile: TeacherProfile = {
-    name: "Professor Wave",
-    avatar: "🌊",
+    name: "Professor Algebra",
+    avatar: "📐",
     colorScheme: {
-      primary: "from-blue-600 to-cyan-500",
-      secondary: "from-indigo-600 to-purple-500",
+      primary: "from-green-600 to-emerald-500",
+      secondary: "from-purple-600 to-pink-500",
       accent: "from-yellow-400 to-orange-500",
-      background: "from-slate-900 via-blue-900 to-slate-900",
+      background: "from-slate-900 via-green-900 to-slate-900",
     },
-    subject: "Physics - Waves",
+    subject: "Mathematics - Algebra",
   };
 
-  // NEW: Keyword Animation Mapping
+  // NEW: Keyword Animation Mapping for Algebra
   const keywordAnimations: KeywordAnimation[] = [
     {
-      keyword: "sound waves",
-      icon: "🔊",
+      keyword: "variables",
+      icon: "🔤",
       animation: "bounce",
       color: "text-blue-400",
     },
     {
-      keyword: "light waves",
-      icon: "💡",
+      keyword: "constants",
+      icon: "🔢",
       animation: "pulse",
       color: "text-yellow-400",
     },
     {
-      keyword: "energy",
-      icon: "⚡",
+      keyword: "equations",
+      icon: "⚖️",
       animation: "ping",
       color: "text-green-400",
     },
     {
-      keyword: "frequency",
-      icon: "📊",
+      keyword: "fraction bar",
+      icon: "➗",
       animation: "spin",
       color: "text-purple-400",
     },
     {
-      keyword: "amplitude",
-      icon: "📈",
+      keyword: "algebra",
+      icon: "📐",
       animation: "bounce",
       color: "text-red-400",
     },
     {
-      keyword: "wavelength",
-      icon: "📏",
+      keyword: "division",
+      icon: "➗",
       animation: "pulse",
       color: "text-cyan-400",
     },
     {
-      keyword: "medium",
-      icon: "🌊",
+      keyword: "multiplication",
+      icon: "✖️",
       animation: "bounce",
       color: "text-blue-400",
     },
     {
-      keyword: "vacuum",
-      icon: "🌌",
+      keyword: "inverse",
+      icon: "🔄",
       animation: "pulse",
       color: "text-indigo-400",
     },
     {
-      keyword: "mechanical",
+      keyword: "substitution",
       icon: "⚙️",
       animation: "spin",
       color: "text-gray-400",
     },
     {
-      keyword: "electromagnetic",
-      icon: "⚡",
+      keyword: "terms",
+      icon: "📝",
       animation: "ping",
       color: "text-yellow-400",
     },
@@ -238,7 +238,7 @@ const PhysicsWavesLevel1: React.FC = () => {
       audio_paused: false,
       current_section: null,
       current_section_index: 0,
-      total_sections: 7,
+      total_sections: 8,
       progress_percentage: 0,
     });
   const [backendTranscript, setBackendTranscript] =
@@ -289,7 +289,7 @@ const PhysicsWavesLevel1: React.FC = () => {
   const recognitionRef = useRef<any>(null);
 
   const API_BASE_URL = "http://localhost:8000";
-  const API_ENDPOINT = "/api/lectures/class7/science/physics/waves/level1";
+  const API_ENDPOINT = "/api/lectures/class7/mathematics/algebra/level1";
   const WS_URL = `ws://localhost:8000${API_ENDPOINT}/ws`;
 
   // Check for speech recognition support
@@ -366,6 +366,39 @@ const PhysicsWavesLevel1: React.FC = () => {
       };
     }
   }, [isLectureStarted, showQaModal]);
+
+  // 🔧 FIX: Reset diagramManuallyClosed when entering a new diagram section
+  useEffect(() => {
+    const currentSection = detailedLectureStatus.current_section?.toLowerCase();
+
+    // List of diagram sections: slides 3, 4, 6, 7
+    const diagramSections = [
+      "substitution_image",
+      "word_problem_image",
+      "real_world_image",
+      "algebraic_vocabulary",
+    ];
+
+    // Check if we're entering a diagram section
+    const isInDiagramSection = diagramSections.some((section) =>
+      currentSection?.includes(section)
+    );
+
+    console.log(
+      `🔍 Section check - Current: "${currentSection}", Is diagram: ${isInDiagramSection}, Flag: ${diagramManuallyClosed}`
+    );
+
+    // ALWAYS reset the flag when entering ANY diagram section
+    // This ensures diagrams always open for new diagram slides
+    if (isInDiagramSection) {
+      if (diagramManuallyClosed) {
+        console.log(
+          `🔄 Entering diagram section "${currentSection}", resetting diagramManuallyClosed flag`
+        );
+        setDiagramManuallyClosed(false);
+      }
+    }
+  }, [detailedLectureStatus.current_section, diagramManuallyClosed]);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -644,7 +677,7 @@ const PhysicsWavesLevel1: React.FC = () => {
           setDiagramManuallyClosed(false); // Reset flag for lecture completion
           addTranscriptItem(
             "Lecture Complete",
-            "🎉 Congratulations! You've completed the physics lecture on waves. Generate flashcards to review what you've learned!",
+            "🎉 Congratulations! You've completed the mathematics lecture on algebra. Generate flashcards to review what you've learned!",
             "complete"
           );
         }
@@ -678,7 +711,7 @@ const PhysicsWavesLevel1: React.FC = () => {
         // Wait a moment for cleanup, then redirect
         setTimeout(() => {
           // Navigate to flashcard page with the generated flashcards
-          window.location.href = `/ai-teacher/class7/science/physics/waves/level1/flashcards?data=${encodeURIComponent(
+          window.location.href = `/ai-teacher/class7/mathematics/algebra/level1/flashcards?data=${encodeURIComponent(
             JSON.stringify(data.data)
           )}`;
         }, 1000);
@@ -707,7 +740,7 @@ const PhysicsWavesLevel1: React.FC = () => {
         await stopLecture();
         // Wait a moment for cleanup, then redirect
         setTimeout(() => {
-          window.location.href = `/ai-teacher/class7/science/physics/waves/level1/quiz`;
+          window.location.href = `/ai-teacher/class7/mathematics/algebra/level1/quiz`;
         }, 1000);
       } else {
         setQuizError(data.message || "Failed to generate quiz");
@@ -806,13 +839,23 @@ const PhysicsWavesLevel1: React.FC = () => {
         const isInDiagramSection =
           diagramData.current_section === "diagram_explanation" ||
           diagramData.current_section?.toLowerCase().includes("diagram") ||
-          diagramData.current_section?.toLowerCase().includes("wave");
+          diagramData.current_section
+            ?.toLowerCase()
+            .includes("substitution_image") ||
+          diagramData.current_section
+            ?.toLowerCase()
+            .includes("word_problem_image") ||
+          diagramData.current_section
+            ?.toLowerCase()
+            .includes("real_world_image") ||
+          diagramData.current_section?.toLowerCase().includes("algebraic");
 
         if (shouldShow && isInDiagramSection && !diagramManuallyClosed) {
           // Show diagram overlay only if not manually closed
           if (!showDiagramOverlay) {
             setDiagramInfo(diagramData.diagram_info);
-            const imageUrl = `${API_BASE_URL}${API_ENDPOINT}/diagram-image/${diagramData.diagram_info.image_filename}`;
+            // Use local images from public folder instead of backend API
+            const imageUrl = `/algebra-images/${diagramData.diagram_info.image_filename}`;
             setDiagramImageUrl(imageUrl);
             setShowDiagramOverlay(true);
 
@@ -820,7 +863,7 @@ const PhysicsWavesLevel1: React.FC = () => {
             addTranscriptItem(
               "Diagram Display",
               diagramData.diagram_info.message ||
-                "🖼️ Wave diagram is now displayed for detailed explanation.",
+                "🖼️ Algebra expression diagram is now displayed for detailed explanation.",
               "diagram"
             );
           }
@@ -905,8 +948,8 @@ const PhysicsWavesLevel1: React.FC = () => {
 
       if (data.status === "success") {
         setDiagramLabels(data.data.labels);
-        // Set the diagram image URL
-        const imageUrl = `${API_BASE_URL}${API_ENDPOINT}/diagram-image/image1.png`;
+        // Set the diagram image URL - use local image
+        const imageUrl = `/algebra-images/algebra_1.png`;
         setDiagramImageUrl(imageUrl);
         setShowInteractiveDiagram(true);
         console.log("✅ Interactive diagram activated successfully");
@@ -1100,12 +1143,14 @@ const PhysicsWavesLevel1: React.FC = () => {
             </div>
           </div>
 
-          <h1 className="start-title">🎓 Physics Lecture</h1>
-          <h2 className="start-subtitle">🌊 Waves - Level 1</h2>
+          <h1 className="start-title">
+            🎓 Algebra Level 1: The Language of Division
+          </h1>
+          <h2 className="start-subtitle">📐 Mathematics - Algebra Level 1</h2>
           <p className="start-description">
-            Get ready for an interactive physics lecture with AI-powered
-            explanations, real-time Q&A sessions, and immersive learning
-            experience.
+            Get ready for an interactive algebra lecture with AI-powered
+            explanations, revolutionary Math Wall TTS processing, and immersive
+            learning experience.
           </p>
 
           <button
@@ -1322,8 +1367,8 @@ const PhysicsWavesLevel1: React.FC = () => {
                 onClick={activateInteractiveDiagram}
                 className="revision-btn primary"
               >
-                <span className="btn-icon">🌊</span>
-                Interactive Diagram
+                <span className="btn-icon">📐</span>
+                Interactive Algebra Diagram
               </button>
 
               {showRevisionSection && (
@@ -1781,7 +1826,7 @@ const PhysicsWavesLevel1: React.FC = () => {
           ></div>
           <div className="diagram-overlay-content">
             <div className="diagram-overlay-header">
-              <h3>🖼️ Wave Diagram</h3>
+              <h3>🖼️ Algebra Expression Diagram</h3>
               <button
                 className="diagram-close-btn"
                 onClick={closeDiagramManually}
@@ -1808,22 +1853,29 @@ const PhysicsWavesLevel1: React.FC = () => {
                   <h4>📖 Explanation</h4>
                   <p>
                     {diagramInfo?.message ||
-                      "Study this wave diagram carefully. Notice the wave patterns and properties."}
+                      "Study this algebraic expression carefully. Notice the variables, constants, and terms."}
                   </p>
                   <div className="diagram-tips">
                     <div className="tip-item">
-                      <span className="tip-icon">📏</span>
+                      <span className="tip-icon">🔤</span>
                       <span>
-                        Observe the wavelength - distance between peaks
+                        Identify variables - letters that represent unknown
+                        values
                       </span>
                     </div>
                     <div className="tip-item">
-                      <span className="tip-icon">📐</span>
-                      <span>Notice the amplitude - height of the wave</span>
+                      <span className="tip-icon">🔢</span>
+                      <span>Spot constants - numbers that never change</span>
                     </div>
                     <div className="tip-item">
-                      <span className="tip-icon">🔄</span>
-                      <span>See the repeating pattern of the wave</span>
+                      <span className="tip-icon">📝</span>
+                      <span>Recognize terms - parts separated by + or -</span>
+                    </div>
+                    <div className="tip-item">
+                      <span className="tip-icon">➗</span>
+                      <span>
+                        Understand fraction bars - the new way to show division
+                      </span>
                     </div>
                   </div>
 
@@ -1835,12 +1887,28 @@ const PhysicsWavesLevel1: React.FC = () => {
                         backendTranscript.transcript
                           .filter(
                             (entry) =>
-                              entry.section_index ===
-                                detailedLectureStatus.current_section_index &&
+                              (entry.section_index ===
+                                detailedLectureStatus.current_section_index ||
+                                Math.abs(
+                                  entry.section_index -
+                                    detailedLectureStatus.current_section_index
+                                ) <= 1) &&
                               (entry.section
                                 .toLowerCase()
                                 .includes("diagram") ||
-                                entry.section.toLowerCase().includes("wave"))
+                                entry.section
+                                  .toLowerCase()
+                                  .includes("algebraic") ||
+                                entry.section
+                                  .toLowerCase()
+                                  .includes("substitution") ||
+                                entry.section
+                                  .toLowerCase()
+                                  .includes("word_problem") ||
+                                entry.section
+                                  .toLowerCase()
+                                  .includes("real_world") ||
+                                entry.section.toLowerCase().includes("image"))
                           )
                           .map((entry, index) => (
                             <div
@@ -1859,7 +1927,14 @@ const PhysicsWavesLevel1: React.FC = () => {
                         !backendTranscript.transcript.some(
                           (entry) =>
                             entry.section.toLowerCase().includes("diagram") ||
-                            entry.section.toLowerCase().includes("wave")
+                            entry.section.toLowerCase().includes("algebraic") ||
+                            entry.section
+                              .toLowerCase()
+                              .includes("substitution") ||
+                            entry.section
+                              .toLowerCase()
+                              .includes("word_problem") ||
+                            entry.section.toLowerCase().includes("real_world")
                         )) && (
                         <div className="diagram-transcript-item">
                           <div className="diagram-transcript-text">
@@ -1963,10 +2038,7 @@ const PhysicsWavesLevel1: React.FC = () => {
         <InteractiveDiagram
           isOpen={showInteractiveDiagram}
           onClose={closeInteractiveDiagram}
-          imageUrl={
-            diagramImageUrl ||
-            `${API_BASE_URL}${API_ENDPOINT}/diagram-image/image1.png`
-          }
+          imageUrl={diagramImageUrl || `/algebra-images/algebra_1.png`}
           labels={diagramLabels}
           onLabelClick={handleLabelClick}
           currentExplanation={currentExplanation}
@@ -1995,4 +2067,4 @@ const PhysicsWavesLevel1: React.FC = () => {
   );
 };
 
-export default PhysicsWavesLevel1;
+export default AlgebraLevel1;

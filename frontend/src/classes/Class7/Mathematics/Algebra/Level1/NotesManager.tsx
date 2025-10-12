@@ -309,7 +309,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
       const requestBody = {
         content: noteContent,
         lecture_section: selectedFolder === "all" ? "" : selectedFolder,
-        lecture_type: standalone ? "general" : "physics_waves_level1",
+        lecture_type: standalone ? "general" : "mathematics_algebra_level1",
       };
 
       console.log("📝 Adding note:", {
@@ -362,7 +362,7 @@ const NotesManager: React.FC<NotesManagerProps> = ({
         const newNote: Note = {
           id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           content: currentNote.trim(),
-          lecture_type: "physics_waves_level1",
+          lecture_type: "mathematics_algebra_level1",
           lecture_section:
             selectedFolder === "all" ? "general" : selectedFolder,
           note_timestamp: new Date().toISOString(),

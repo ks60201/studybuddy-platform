@@ -22,6 +22,11 @@ from typing import List, Dict, Any, Optional
 from auth import get_current_user_token, TokenData, get_current_user_data
 from config import supabase, supabase_service, SECRET_KEY, ALGORITHM
 import logging
+# 🧱 Import the revolutionary Math Wall
+from .math_wall_algebra import MathWallAlgebra
+
+# 🎭 Import the revolutionary Emotion Detector
+from .emotion_detector import EmotionDetector
 
 # Security
 security = HTTPBearer()
@@ -30,21 +35,53 @@ security = HTTPBearer()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/lectures/class7/science/physics/waves/level1", tags=["physics-lecture"])
+router = APIRouter(prefix="/api/lectures/class7/mathematics/algebra/level1", tags=["mathematics-lecture"])
 
-class PhysicsLectureStreamer:
+class AlgebraLectureStreamer:
     def __init__(self, gemini_api_key=None, gemini_url=None):
         # Try to use GPU for faster processing
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"🚀 Using device: {device}")
+        
+        # 🧱 Initialize the revolutionary Math Wall for Algebra
+        self.math_wall = MathWallAlgebra()
+        print("🧱 Math Wall for Algebra initialized - Revolutionary TTS preprocessing ready!")
+        
+        # 🎭 Initialize the revolutionary Emotion Detector
+        self.emotion_detector = EmotionDetector()
+        print("🎭 Emotion Detector initialized - Personalized Q&A responses ready!")
+        
+        # 🎤 Initialize emotion-aware TTS settings
+        self.current_emotion = "neutral"  # Track current emotion for TTS modulation
+        self.emotion_tts_settings = {
+            "curious": {
+                "speed": 2.2,  # Faster, excited pace
+                "description": "Fast & Enthusiastic"
+            },
+            "simple": {
+                "speed": 2.0,  # Normal, clear pace
+                "description": "Clear & Steady"
+            },
+            "nervous": {
+                "speed": 1.6,  # Slower, calmer pace
+                "description": "Slow & Reassuring"
+            },
+            "neutral": {
+                "speed": 2.0,  # Default pace
+                "description": "Normal"
+            }
+        }
         
         # Initialize TTS with clear female voice and optimized speed
         try:
             # Use VITS with female speaker for clear female voice
             self.tts = TTS("tts_models/en/vctk/vits", progress_bar=False, gpu=False)
             self.speaker = "p225"  # Female speaker for VITS
-            self.tts_speed = 2.0  # Increase speed for faster processing (target: ~1 second)
-            print("✅ Using VITS female voice model (p225) - clear and natural with 2.0x speed")
+            self.tts_speed = 2.0  # Default speed (will be adjusted based on emotion)
+            print("✅ Using VITS female voice model (p225) - clear and natural with emotion-aware speed")
+            print("🎤 Emotion-aware TTS initialized:")
+            for emotion, settings in self.emotion_tts_settings.items():
+                print(f"   {emotion.upper()}: {settings['speed']}x speed ({settings['description']})")
         except Exception as e:
             print(f"⚠️  Failed to load VITS female model: {e}")
             try:
@@ -101,7 +138,7 @@ class PhysicsLectureStreamer:
         self.current_lecture_section = None
         
         # Image handling
-        self.images_folder = "/Users/koushal/Desktop/studybuddy_1/backend/lectures/class7/science/physics/waves/pictures"
+        self.images_folder = "/Users/koushal/Desktop/studybuddy_1/backend/lectures/class7/mathematics/algebra/level1/picture"
         self.current_image = None
         self.current_diagram_info = None
         
@@ -114,12 +151,13 @@ class PhysicsLectureStreamer:
         self.current_section_index = 0
         self.sections = [
             "introduction",
-            "what_are_waves", 
-            "types_of_waves",
-            "medium_vs_vacuum",
-            "real_world_examples",
-            "diagram_explanation",
-            "ending_lecture"  # New ending slide
+            "fraction_bar_notation", 
+            "algebraic_vocabulary",
+            "substitution_image",
+            "inverse_operations",
+            "word_problem_image",
+            "real_world_image",
+            "conclusion"
         ]
         
         # NEW: Transcript generation
@@ -314,33 +352,33 @@ class PhysicsLectureStreamer:
         print("🎵 Audio stream ended")
     
     def generate_answer_to_question(self, question, current_topic):
-        """Generate an answer to a student's question using Gemini"""
+        """Generate an answer to a student's question using Gemini with EMOTION AWARENESS"""
         if not self.gemini_api_key or not self.gemini_url:
             return self.get_fallback_answer(question, current_topic)
         
         try:
+            # 🎭 DETECT STUDENT EMOTION from question
+            emotion_data = self.emotion_detector.detect_emotion(question)
+            emotion = emotion_data["emotion"]
+            confidence = emotion_data["confidence"]
+            
+            print(f"🎭 Student emotion: {emotion.upper()} ({confidence:.0%} confidence)")
+            print(f"   Adapting response style for {emotion} student...")
+            
+            # 🎤 ADJUST TTS VOICE based on detected emotion
+            self.set_emotion_for_tts(emotion)
+            
+            # Generate emotion-aware prompt
+            prompt = self.emotion_detector.generate_emotion_prompt(
+                question=question,
+                current_topic=current_topic,
+                emotion_data=emotion_data
+            )
+            
             url_with_key = f"{self.gemini_url}?key={self.gemini_api_key}"
             
-            prompt = f"""
-            A Class 7 Physics student (12-13 years old) just asked this AMAZING question about waves: "{question}"
-            
-            The current topic being discussed is: {current_topic}
-            
-            Please provide the BEST, most helpful answer in the world that:
-            - Is super friendly and encouraging (like talking to a friend!)
-            - Uses fun, energetic language with exclamation marks!
-            - Includes phrases like "That's a GREAT question!", "You're thinking like a scientist!", "How awesome is that?"
-            - Uses words like "amazing", "incredible", "super cool", "mind-blowing"
-            - Gives real-world examples they can relate to
-            - Explains things in the most exciting way possible
-            - Makes them feel smart and capable
-            - Encourages curiosity and further questions
-            - Is 150-200 words long (more detailed and helpful)
-            - Includes fun analogies and comparisons
-            - Makes complex concepts feel simple and exciting
-            - Ends with encouragement to ask more questions
-            - Makes them feel like they're discovering something incredible!
-            """
+            # Add Math Wall rule to the emotion-aware prompt
+            enhanced_prompt = self.add_math_wall_rule(prompt)
             
             headers = {
                 "Content-Type": "application/json"
@@ -349,7 +387,7 @@ class PhysicsLectureStreamer:
             data = {
                 "contents": [{
                     "parts": [{
-                        "text": prompt
+                        "text": enhanced_prompt
                     }]
                 }]
             }
@@ -360,7 +398,10 @@ class PhysicsLectureStreamer:
                 result = response.json()
                 generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                 print(f"🤖 Gemini generated answer: {len(generated_text)} characters")
-                return generated_text
+                
+                # 🔧 POST-PROCESSING: Validate and fix mathematical notation
+                validated_text = self.validate_and_fix_mathematical_notation(generated_text)
+                return validated_text
             else:
                 print(f"❌ Gemini API error: {response.status_code}")
                 print(f"Response: {response.text}")
@@ -371,15 +412,54 @@ class PhysicsLectureStreamer:
             return self.get_fallback_answer(question, current_topic)
     
     def get_fallback_answer(self, question, current_topic):
-        """Fallback answer when Gemini is not available"""
-        return (
-            f"That's an AMAZING question about {current_topic}! You're thinking like a super scientist! "
-            "Waves are absolutely incredible because they're nature's way of sending energy and messages from one place to another! "
-            "Think about how sound waves travel through the air to reach your ears - it's like invisible messengers carrying your favorite music! "
-            "Or how light waves travel from the sun to help you see all the beautiful colors around you - it's mind-blowing! "
-            "Waves can travel through different materials like air, water, and even solid objects - they're super versatile! "
-            "Keep asking these awesome questions - that's exactly how amazing discoveries are made! You're becoming a wave expert!"
-        )
+        """Fallback answer when Gemini is not available - with EMOTION AWARENESS"""
+        # 🎭 Detect emotion even for fallback
+        emotion_data = self.emotion_detector.detect_emotion(question)
+        emotion = emotion_data["emotion"]
+        
+        print(f"🎭 Using emotion-aware fallback for {emotion.upper()} student")
+        
+        # 🎤 ADJUST TTS VOICE based on detected emotion
+        self.set_emotion_for_tts(emotion)
+        
+        if emotion == "curious":
+            answer = (
+                f"What a BRILLIANT question about {current_topic}! You're thinking like a real mathematician! "
+                "Here's what's really fascinating: algebra is the powerful language where numbers meet letters, "
+                "and it lets us solve mysteries that would be impossible with just numbers alone! "
+                "Think about x/5 - it's not just division, it's a way to represent ANY number divided by 5. "
+                "That's the power of variables! They're like mathematical wildcards. "
+                "You can even explore how this connects to equations, graphing, and advanced mathematics. "
+                "Keep asking these deep questions - that's exactly how breakthroughs happen! You're on the path to algebraic mastery!"
+            )
+            return self.validate_and_fix_mathematical_notation(answer)
+        elif emotion == "simple":
+            answer = (
+                f"Good question! Simply put, {current_topic} is all about understanding algebraic notation. "
+                "Basically, when we write x/5, we mean 'x divided by 5'. "
+                "For example, if x = 10, then x/5 = 10/5 = 2. "
+                "In other words, the fraction bar is just another way to show division. "
+                "Does that make sense? Feel free to ask for more examples!"
+            )
+            return self.validate_and_fix_mathematical_notation(answer)
+        elif emotion == "nervous":
+            answer = (
+                f"Don't worry at all! {current_topic} is actually easier than it looks, I promise! "
+                "You're doing GREAT by asking this question - that shows you're engaged and learning! "
+                "Let's take this step by step: algebra just uses letters (like x, y) to represent numbers we don't know yet. "
+                "Think of it like a mystery box - we use x until we figure out what number it is. "
+                "For example, x/5 simply means 'whatever x is, divide it by 5'. If x = 20, then x/5 = 4. Easy! "
+                "See? You already understand it! This is totally normal to find tricky at first, but you've got this! "
+                "Want to try another example together? You're becoming an algebra expert already!"
+            )
+            return self.validate_and_fix_mathematical_notation(answer)
+        else:
+            answer = (
+                f"That's a great question about {current_topic}! "
+                "Algebra helps us work with unknown values using variables like x and y. "
+                "Keep asking questions - you're learning really well!"
+            )
+            return self.validate_and_fix_mathematical_notation(answer)
     
     def handle_qa_session(self, current_topic):
         """Handle Q&A session after each topic (text-based only)"""
@@ -485,24 +565,102 @@ class PhysicsLectureStreamer:
                             f"Q&A - {current_topic}",
                             "Q&A session completed."
                         )
+                        # 🎤 RESET TTS to neutral speed after Q&A
+                        self.set_emotion_for_tts("neutral")
                         break
                     else:
                         print("✅ Student has more questions - continuing Q&A")
                         continue
                 else:
                     print("⏰ No question entered - continuing lecture")
+                    # 🎤 RESET TTS to neutral speed
+                    self.set_emotion_for_tts("neutral")
                     break
         else:
             print("✅ No questions - continuing lecture")
+            # 🎤 RESET TTS to neutral speed
+            self.set_emotion_for_tts("neutral")
         
         print(f"✅ Q&A session completed for: {current_topic}")
         print("-" * 40)
+    
+    def add_math_wall_rule(self, prompt):
+        """Add universal Math Wall rule to any prompt"""
+        math_wall_rule = """
+🚨🚨🚨 UNIVERSAL MATH WALL RULE - MANDATORY FOR ALL CONTENT 🚨🚨🚨
+- ALWAYS use mathematical symbols: x/5, 20/x + 2, x = 7, d/2 = 7, 3x, y/4
+- NEVER use word descriptions: "x over 5", "twenty over x plus two", "x equals seven", "three x", "y over four"
+- The Math Wall converts symbols to speech automatically
+- Examples: Write "x/5" NOT "x over 5", Write "20/x + 2" NOT "20 over x plus 2"
+- This rule is NON-NEGOTIABLE and applies to ALL mathematical expressions
+- VIOLATION PENALTY: Any word descriptions will be automatically corrected by post-processing
+"""
+        return math_wall_rule + "\n\n" + prompt
+
+    def validate_and_fix_mathematical_notation(self, text):
+        """Post-process text to ensure mathematical notation compliance"""
+        if not text:
+            return text
+            
+        # Common word-to-symbol replacements
+        replacements = {
+            # Division patterns
+            r'\b(\w+)\s+over\s+(\w+)\b': r'\1/\2',
+            r'\b(\w+)\s+divided\s+by\s+(\w+)\b': r'\1/\2',
+            r'\b(\w+)\s+÷\s+(\w+)\b': r'\1/\2',
+            
+            # Multiplication patterns  
+            r'\b(\d+)\s+x\b': r'\1x',
+            r'\b(\d+)\s+times\s+(\w+)\b': r'\1\2',
+            r'\b(\w+)\s+times\s+(\d+)\b': r'\1\2',
+            
+            # Equality patterns
+            r'\b(\w+)\s+equals\s+(\w+)\b': r'\1 = \2',
+            r'\b(\w+)\s+=\s+(\w+)\b': r'\1 = \2',
+            
+            # Number word patterns
+            r'\btwenty\b': '20',
+            r'\bten\b': '10',
+            r'\bfive\b': '5',
+            r'\bfour\b': '4',
+            r'\bthree\b': '3',
+            r'\btwo\b': '2',
+            r'\bone\b': '1',
+            r'\bsix\b': '6',
+            r'\bseven\b': '7',
+            r'\beight\b': '8',
+            r'\bnine\b': '9',
+            r'\bfifteen\b': '15',
+            r'\btwelve\b': '12',
+            r'\bforty\b': '40',
+            r'\bforty-two\b': '42',
+            
+            # Common phrases
+            r'\bplus\s+(\w+)\b': r'+ \1',
+            r'\bminus\s+(\w+)\b': r'- \1',
+        }
+        
+        # Apply replacements
+        fixed_text = text
+        for pattern, replacement in replacements.items():
+            fixed_text = re.sub(pattern, replacement, fixed_text, flags=re.IGNORECASE)
+        
+        # Log if any changes were made
+        if fixed_text != text:
+            print(f"🔧 POST-PROCESSING: Fixed mathematical notation")
+            print(f"   BEFORE: {text[:100]}...")
+            print(f"   AFTER:  {fixed_text[:100]}...")
+        
+        return fixed_text
     
     def generate_text_with_gemini(self, prompt):
         """Generate text using Gemini AI with retry logic"""
         if not self.gemini_api_key or not self.gemini_url:
             print("⚠️  Gemini API key or URL not provided, using fallback text")
             return self.get_fallback_text(prompt)
+        
+        # Add Math Wall rule to every prompt
+        enhanced_prompt = self.add_math_wall_rule(prompt)
         
         max_retries = 3
         retry_delay = 2  # seconds
@@ -518,7 +676,7 @@ class PhysicsLectureStreamer:
                 data = {
                     "contents": [{
                         "parts": [{
-                            "text": prompt
+                            "text": enhanced_prompt
                         }]
                     }]
                 }
@@ -529,7 +687,10 @@ class PhysicsLectureStreamer:
                     result = response.json()
                     generated_text = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     print(f"🤖 Gemini generated text: {len(generated_text)} characters")
-                    return generated_text
+                    
+                    # 🔧 POST-PROCESSING: Validate and fix mathematical notation
+                    validated_text = self.validate_and_fix_mathematical_notation(generated_text)
+                    return validated_text
                 elif response.status_code == 503:
                     print(f"⚠️  Gemini API overloaded (503), attempt {attempt + 1}/{max_retries}")
                     if attempt < max_retries - 1:
@@ -564,66 +725,91 @@ class PhysicsLectureStreamer:
         
         if "introduction" in prompt_lower:
             return (
-                "Hey there, amazing scientists! Welcome to the coolest physics adventure ever! "
-                "Today, we're going to discover the incredible world of waves - nature's super cool way of sending energy and messages! "
-                "Waves are EVERYWHERE around us - from the music that makes you dance to the light that helps you see your favorite colors! "
-                "In this awesome lesson, we'll learn about what waves are, how they travel, "
-                "and why they make our world so incredibly amazing! "
-                "Get ready to unlock the secret superpower of understanding waves!"
+                "Hello future mathematicians! I'm your AI tutor, and today we're starting our journey into algebra - the powerful language where numbers meet letters! "
+                "This first level is all about building a solid foundation by mastering the new vocabulary and notation, especially how we handle division. "
+                "By the end of this lecture, you'll be able to read, understand, and set up your first algebraic equations! "
+                "What we'll cover today: New notation for division using the algebraic standard, the vocabulary of variables, constants, and terms, "
+                "understanding division as the essential inverse operation of multiplication, and setting up simple equations from word problems. "
+                "Let's dive in and transform our basic arithmetic skills into concrete algebraic concepts!"
             )
-        elif "what are waves" in prompt_lower or "waves explanation" in prompt_lower:
+        elif "fraction bar" in prompt_lower or "division notation" in prompt_lower:
             return (
-                "Let me explain waves with some real-world examples. "
-                "Think about when you throw a stone into a pond. "
-                "The ripples that spread out from where the stone hit the water are waves! "
-                "These ripples carry energy from the center outward. "
-                "Another great example is sound waves. When you speak, "
-                "your vocal cords create vibrations that travel through the air as sound waves. "
-                "These waves reach our ears and we hear the sound. "
-                "Light waves work similarly - they travel from the sun to Earth, "
-                "allowing us to see everything around us. "
-                "Waves can travel through different materials like air, water, and even solid objects!"
+                "In your earlier math courses, you primarily used the standard division symbol, ÷ (for example, 10÷2=5). "
+                "In algebra, we nearly always stop using that symbol. Why? Because the division symbol can look confusing or be easily mistaken for other symbols, "
+                "especially as equations get longer and more complex. "
+                "The most common, clear, and preferred way to show division in algebra is using the fraction bar. "
+                "The expression 'x divided by 5' is written as x over 5. "
+                "The expression 'the sum of a and b, divided by 2' is written as (a+b) over 2. "
+                "The fraction bar is so effective because it functions as a built-in grouping symbol. "
+                "It instantly tells you to treat the entire numerator (the top part, or dividend) as a single group, "
+                "and the entire denominator (the bottom part, or divisor) as another, simplifying the visual hierarchy of the equation!"
             )
-        elif "types of waves" in prompt_lower:
+        elif "variables constants terms" in prompt_lower or "vocabulary" in prompt_lower:
             return (
-                "There are two main types of waves: mechanical waves and electromagnetic waves. "
-                "Mechanical waves need a medium to travel through, like sound waves in air or water waves in water. "
-                "Electromagnetic waves, like light and radio waves, can travel through empty space. "
-                "Think of it this way: you can't hear sound in space because there's no air, "
-                "but you can see light from stars because light doesn't need air to travel!"
+                "Let's learn the core vocabulary using an expression that involves division: 4 over y plus 9. "
+                "Breaking this down is essential for understanding any algebraic problem. "
+                "Variable (y): This is the letter. It represents a value that is unknown or prone to change. We need to find its value to solve the problem. "
+                "Constant (9): This is the fixed number. Its value never changes, regardless of what the variable is. "
+                "Term (4 over y and 9): Terms are separated by addition or subtraction signs. This expression has two terms. "
+                "The term 4 over y specifically means 'some unknown quantity (y) is being shared equally among 4 people or groups,' "
+                "clearly embedding the idea of division into the term itself!"
             )
-        elif "medium" in prompt_lower or "vacuum" in prompt_lower:
+        elif "substitution" in prompt_lower or "evaluate" in prompt_lower:
             return (
-                "The medium is what waves travel through. Sound waves need air, water, or solid objects. "
-                "That's why you can't hear anything in space - there's no air for sound to travel through! "
-                "But light waves are different. They can travel through empty space, which is why we can see "
-                "stars that are millions of miles away. This is why astronauts need radios to talk in space, "
-                "but they can still see each other perfectly!"
+                "Before we solve equations, we must master substitution. Substitution means replacing the variable with a known numerical value and simplifying the expression. "
+                "Problem: Evaluate the expression 20 over x plus 2 if the variable x equals 5. "
+                "Solution Steps: First, substitute by replacing x with the given number 5: 20 over 5 plus 2. "
+                "Second, divide first using Order of Operations: Calculate the division: 20 divided by 5 equals 4. "
+                "Third, add last: Complete the addition: 4 plus 2 equals 6. "
+                "The value of the expression is 6. This step confirms you understand the notation and the structure of an expression involving division!"
             )
-        elif "real world" in prompt_lower or "examples" in prompt_lower:
+        elif "inverse operations" in prompt_lower or "multiplication division" in prompt_lower:
             return (
-                "Waves are everywhere in our world! Think about the music you listen to - that's sound waves. "
-                "The colors you see are light waves of different lengths. When you throw a stone in a pond, "
-                "those ripples are water waves. Radio waves carry your favorite music to your radio. "
-                "Even earthquakes are caused by seismic waves traveling through the Earth. "
-                "Waves help us communicate, entertain, and understand our world!"
+                "The key to solving any equation is using inverse operations to isolate the variable. The variable is like a treasure, and inverse operations are the keys to unlocking it. "
+                "The inverse (or opposite) of addition is subtraction. Crucially for this unit, the inverse of multiplication is division. "
+                "If you have a variable x being multiplied by 3 (3x), you must divide both sides by 3 to 'undo' the multiplication and solve for x. "
+                "Similarly, if you have a variable y being divided by 4 (y over 4), you must multiply both sides by 4 to 'undo' the division and solve for y. "
+                "Remember the most important rule of algebra: An equation is a balanced scale. Whatever operation you apply to one side of the equation, "
+                "you MUST apply the exact same operation to the other side to keep it perfectly balanced!"
             )
-        elif "diagram" in prompt_lower:
+        elif "word problems" in prompt_lower or "translating" in prompt_lower:
             return (
-                "Wave diagrams help us understand wave properties. The highest point is called the crest, "
-                "and the lowest point is the trough. The distance between two crests is the wavelength. "
-                "The height of the wave from the middle to the crest is the amplitude. "
-                "More waves passing per second means higher frequency. "
-                "These diagrams help us visualize how waves behave and measure their properties!"
+                "Now we combine our new notation and vocabulary to master a crucial skill: translating a sentence into a solvable algebraic equation. "
+                "Word Problem: 'When a number is divided by six, the result is seven.' "
+                "Translation Steps: First, 'A number' becomes our variable: x. "
+                "Second, 'is divided by six' is written using the fraction bar: x over 6. "
+                "Third, 'the result is seven' sets the right side of the equation: equals 7. "
+                "The Final Equation: x over 6 equals 7. "
+                "We have successfully set up a simple division equation! We won't solve it yet - that's Level 2 - "
+                "but recognizing how the words map to the symbols is Level 1 mastery!"
             )
 
         else:
             return (
-                "Waves are fascinating phenomena that carry energy and information. "
-                "They can travel through different materials and help us understand "
-                "how sound, light, and other forms of energy move through our world. "
-                "Learning about waves helps us understand the fundamental nature of our universe."
+                "Algebra is the powerful language where numbers meet letters! "
+                "It helps us solve problems by using variables to represent unknown values. "
+                "Through division notation, vocabulary building, and understanding inverse operations, "
+                "we can translate everyday situations into mathematical equations and solve them step by step. "
+                "This foundation will help you tackle more complex algebraic challenges in the future!"
             )
+    
+    def set_emotion_for_tts(self, emotion):
+        """
+        Set the current emotion for TTS voice modulation
+        
+        Args:
+            emotion (str): The emotion to set (curious, simple, nervous, neutral)
+        """
+        if emotion in self.emotion_tts_settings:
+            self.current_emotion = emotion
+            self.tts_speed = self.emotion_tts_settings[emotion]["speed"]
+            description = self.emotion_tts_settings[emotion]["description"]
+            print(f"🎤 TTS Voice adjusted for {emotion.upper()} student:")
+            print(f"   Speed: {self.tts_speed}x ({description})")
+        else:
+            print(f"⚠️  Unknown emotion '{emotion}', using neutral settings")
+            self.current_emotion = "neutral"
+            self.tts_speed = self.emotion_tts_settings["neutral"]["speed"]
     
     def clean_text_for_tts(self, text):
         """Clean text for better TTS synthesis"""
@@ -642,7 +828,9 @@ class PhysicsLectureStreamer:
         if len(text) > 2000:
             text = text[:2000] + "..."
         
-        return text
+        # 🔧 POST-PROCESSING: Validate and fix mathematical notation
+        validated_text = self.validate_and_fix_mathematical_notation(text)
+        return validated_text
     
     def synthesis_worker(self, text_chunks):
         """Worker thread for TTS synthesis"""
@@ -711,8 +899,13 @@ class PhysicsLectureStreamer:
             return None
         
         try:
-            # Split text into manageable chunks
-            sentences = re.split(r'[.!?]+', text)
+            # 🧱 REVOLUTIONARY MATH WALL PREPROCESSING
+            print(f"🧱 Math Wall processing: '{text[:50]}...'")
+            processed_text = self.math_wall.process_text(text)
+            print(f"🧱 Math Wall output: '{processed_text[:50]}...'")
+            
+            # Split processed text into manageable chunks
+            sentences = re.split(r'[.!?]+', processed_text)
             text_chunks = [s.strip() for s in sentences if s.strip()]
             
             if not text_chunks:
@@ -766,13 +959,28 @@ class PhysicsLectureStreamer:
     def send_diagram_display_signal(self, image_filename, image_path):
         """Send signal to frontend to display diagram overlay"""
         try:
+            # Get the current section name
+            current_section = getattr(self, 'current_lecture_section', 'diagram_explanation')
+            
+            # Create appropriate message based on section
+            if current_section == "substitution_image":
+                message = "🖼️ Displaying substitution machine! Look at how variables are replaced with numbers!"
+            elif current_section == "word_problem_image":
+                message = "🖼️ Displaying translation machine! See how words become mathematical equations!"
+            elif current_section == "real_world_image":
+                message = "🖼️ Displaying real life application! See how algebra helps solve everyday problems!"
+            elif current_section == "algebraic_vocabulary":
+                message = "🖼️ Displaying algebraic vocabulary! Learn about variables, constants, and terms!"
+            else:
+                message = "🖼️ Displaying algebra expression diagram. Take a close look at the variables, constants, and terms!"
+            
             # This will be handled by the WebSocket or API endpoint
             diagram_info = {
                 "type": "diagram_display",
                 "image_filename": image_filename,
                 "image_path": image_path,
-                "section": "diagram_explanation",
-                "message": "🖼️ Displaying wave diagram. Take a close look at the wave pattern and properties!"
+                "section": current_section,
+                "message": message
             }
             print(f"📡 Sending diagram display signal: {diagram_info}")
             # Store diagram info for frontend to retrieve
@@ -802,28 +1010,36 @@ class PhysicsLectureStreamer:
         print("✅ Audio thread started")
         
         try:
-            # 1. Introduction
-            print("\n📚 SECTION 1: INTRODUCTION")
+            # SLIDE 1: Introduction (no Q&A)
+            print("\n📚 SLIDE 1: INTRODUCTION")
             print("-" * 30)
             self.current_lecture_section = "introduction"
             self.current_section_index = 0
             self.section_start_times["introduction"] = datetime.now()
             
             intro_prompt = """
-            Generate an exciting and super friendly introduction for a Class 7 Physics lesson about waves! 
+            🚨🚨🚨 BULLETPROOF MATH NOTATION RULE - ZERO TOLERANCE 🚨🚨🚨
+            - MANDATORY: Use ONLY mathematical symbols: x/5, 20/x + 2, x = 7, d/2 = 7, 3x, y/4
+            - FORBIDDEN: Word descriptions like "x over 5", "twenty over x plus two", "x equals seven", "three x", "y over four"
+            - ENFORCEMENT: Post-processing will automatically fix any violations
+            - EXAMPLES: Write "x/5" NOT "x over 5", Write "20/x + 2" NOT "20 over x plus 2"
+            - PENALTY: Any word descriptions will be corrected by the system
+            
+            Generate an exciting and super friendly introduction for a Class 7 Mathematics lesson about Algebra Level 1: The Language of Division! 
             The introduction should:
             - Be 150-200 words
-            - Start with a super warm welcome like "Hey there, amazing scientists!" or "Welcome to the coolest physics adventure!"
-            - Use fun, energetic language that makes students feel excited
-            - Explain waves as "awesome energy messengers" or "nature's way of sending messages"
-            - Mention that waves are EVERYWHERE and make our world super cool
-            - Give fun examples like "the music that makes you dance", "the light that helps you see your favorite colors", "the ripples when you splash in a pool"
+            - Start with a super warm welcome like "Hello future mathematicians!" or "Welcome to the amazing world of algebra!"
+            - Use fun, energetic language that makes students feel excited about math
+            - Explain algebra as "the powerful language where numbers meet letters" or "the secret code of mathematics"
+            - Mention that algebra helps us solve everyday problems and unlock mathematical mysteries
+            - Give fun examples like "figuring out how much pizza each friend gets", "calculating phone bill charges", "solving mystery numbers"
             - Use exclamation marks and positive energy!
             - Include phrases like "get ready for an amazing journey", "you're going to discover something incredible"
             - Make students feel like they're about to unlock a secret superpower
             - Use words like "awesome", "amazing", "incredible", "super cool"
             - End with excitement about what they'll learn
             - Be super encouraging and make them feel like they can do anything!
+            - CRITICAL: When mentioning any math, use ONLY symbols like x/5, 20/x + 2, d/2 = 7
             """
             
             intro_text = self.generate_text_with_gemini(intro_prompt)
@@ -845,39 +1061,50 @@ class PhysicsLectureStreamer:
             if not self.wait_if_paused():
                 return  # Lecture was stopped while paused
             
-            # 2. What are waves
-            print("\n📚 SECTION 2: WHAT ARE WAVES")
+            # SLIDE 2: Fraction Bar Notation
+            print("\n📚 SLIDE 2: FRACTION BAR NOTATION")
             print("-" * 30)
-            self.current_lecture_section = "what_are_waves"
+            self.current_lecture_section = "fraction_bar_notation"
             self.current_section_index = 1
-            self.section_start_times["what_are_waves"] = datetime.now()
+            self.section_start_times["fraction_bar_notation"] = datetime.now()
             
             waves_prompt = """
-            Generate a super fun and exciting explanation of what waves are for Class 7 Physics students! 
+            🚨🚨🚨 BULLETPROOF MATH NOTATION RULE - ZERO TOLERANCE 🚨🚨🚨
+            - MANDATORY: Use ONLY mathematical symbols: x/5, 20/x + 2, x = 7, (a+b)/2, y/3, d/2
+            - FORBIDDEN: Word descriptions like "x over 5", "x divided by 5", "twenty over x", "x equals seven", "a plus b over 2"
+            - ENFORCEMENT: Post-processing will automatically fix any violations
+            - EXAMPLES: Write "x/5" NOT "x over 5", Write "(a+b)/2" NOT "a plus b over 2"
+            - PENALTY: Any word descriptions will be corrected by the system
+            
+            Generate a super fun and exciting explanation of algebraic notation for division (fraction bar) for Class 7 Mathematics students! 
             The explanation should:
             - Be 150-200 words
             - Start with something exciting like "Okay, get ready for something AMAZING!"
-            - Define waves as "nature's super cool way of sending energy and messages"
-            - Use fun analogies like "waves are like invisible messengers running around the universe"
-            - Give super relatable examples like "the sound of your favorite song", "the light that makes rainbows", "the ripples when you throw a pebble in water"
+            - Explain that in algebra, we use fraction bars instead of the ÷ symbol
+            - Show examples using ONLY symbols: x/5, (a+b)/2, 20/x, y/3
+            - Explain that fraction bars are like built-in grouping symbols that make math clearer
+            - Use fun analogies like "fraction bars are like invisible parentheses that group things together"
+            - Give super relatable examples like "sharing pizza equally", "dividing money among friends", "calculating average scores"
+            - When showing math, write ONLY: x/5, (a+b)/2, 20/x + 2, y/3 = 4
             - Use energetic language with exclamation marks!
             - Include phrases like "isn't that incredible?", "how cool is that?", "you're going to love this!"
-            - Make it feel like they're discovering a secret power
+            - Make it feel like they're discovering a secret mathematical power
             - Use words like "awesome", "amazing", "incredible", "super cool", "mind-blowing"
-            - Connect to things they love: music, colors, swimming, playing
-            - Make them feel like they're becoming wave experts
-            - End with excitement about learning more
+            - Connect to things they know: sharing, dividing, grouping
+            - Make them feel like they're becoming algebra experts
+            - End with excitement about learning more algebraic notation
+            - CRITICAL: Every mathematical expression MUST use symbols, never words
             """
             
             waves_text = self.generate_text_with_gemini(waves_prompt)
-            print(f"📚 Waves explanation generated: {len(waves_text)} characters")
+            print(f"📚 Fraction bar notation explanation generated: {len(waves_text)} characters")
             
             # Add to transcript
-            self.add_to_transcript("what_are_waves", waves_text)
+            self.add_to_transcript("fraction_bar_notation", waves_text)
             
             synthesis_thread = self.synthesize_and_stream_text(waves_text)
             synthesis_thread.join()
-            print("✅ Waves explanation completed!")
+            print("✅ Fraction bar notation explanation completed!")
             
             # Wait for audio to finish
             while not self.audio_queue.empty():
@@ -888,43 +1115,74 @@ class PhysicsLectureStreamer:
             if not self.wait_if_paused():
                 return  # Lecture was stopped while paused
             
-            # Q&A for waves
-            self.handle_qa_session("what waves are")
+            # Q&A for fraction bar notation
+            self.handle_qa_session("fraction bar notation")
             time.sleep(1.0)
             
-            # 3. Types of waves
-            print("\n📚 SECTION 3: TYPES OF WAVES")
+            # SLIDE 3: Algebraic Vocabulary Diagram (algebra_1.png)
+            print("\n📚 SLIDE 3: ALGEBRAIC VOCABULARY DIAGRAM")
             print("-" * 30)
-            self.current_lecture_section = "types_of_waves"
+            self.current_lecture_section = "algebraic_vocabulary"
             self.current_section_index = 2
-            self.section_start_times["types_of_waves"] = datetime.now()
+            self.section_start_times["algebraic_vocabulary"] = datetime.now()
+            
+            # Load the algebraic vocabulary image
+            self.load_and_display_image("algebra_1.png")
             
             types_prompt = """
-            Generate a super exciting explanation of different types of waves for Class 7 Physics students! 
+            🚨🚨🚨 CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+            YOU MUST WRITE: 4/y + 9 (using symbols)
+            YOU MUST NOT WRITE: "4 over y plus 9" or "four over y" or "y divided by" 
+            
+            EXAMPLES OF CORRECT FORMAT:
+            ✅ "Look at 4/y + 9"
+            ✅ "The expression 4/y + 9 has two terms"
+            ✅ "In 4/y + 9, the variable is y"
+            ✅ "The term 4/y means division"
+            
+            EXAMPLES OF WRONG FORMAT (NEVER USE THESE):
+            ❌ "Look at 4 over y plus 9"
+            ❌ "The expression four over y plus nine"
+            ❌ "In four over y plus nine"
+            ❌ "The term 4 over y"
+            
+            The Math Wall automatically converts 4/y to speech. YOU just write the symbols!
+            
+            Generate a super exciting explanation of algebraic vocabulary (variables, constants, and terms) using the image shown! 
             The explanation should:
             - Be 150-200 words
-            - Start with something like "Now for the REALLY cool part!"
-            - Explain mechanical waves as "waves that need a ride" (like sound needing air)
-            - Explain electromagnetic waves as "waves that are super independent" (like light traveling through space)
-            - Give fun examples: mechanical waves are like "sound waves that need air to travel", "water waves that need water", "earthquake waves that travel through the ground"
-            - Give fun examples: electromagnetic waves are like "light that can travel through space", "radio waves that bring your favorite music", "X-rays that help doctors see inside"
+            - Start with something like "Look at this amazing diagram! Let me explain the secret language of algebra!"
+            - Reference the image: "In this picture, you can see the different parts of an algebraic expression"
+            - Explain variables as "mystery boxes" or "letters that hold secrets" (like x, y, z) - point to them in the image
+            - Explain constants as "your best friends who never change" (like 5, 10, 3.14) - show them in the image
+            - Explain terms as "separate parts of a mathematical sentence" separated by + or - - highlight them in the image
+            
+            🚨 WHEN GIVING EXAMPLES, WRITE EXACTLY LIKE THIS:
+            "Let's look at 4/y + 9. The variable is y. The constant is 9. We have two terms: 4/y and 9."
+            
+            NOT LIKE THIS: "Let's look at 4 over y plus 9" ❌
+            
+            - Show more examples using ONLY symbols: 3x + 2, y/5 = 7, 20/x + 4
             - Use phrases like "isn't that mind-blowing?", "how awesome is that?", "you're learning something incredible!"
-            - Make it feel like they're discovering secret wave powers
+            - Make it feel like they're discovering secret mathematical powers
             - Use energetic language with exclamation marks!
-            - Connect to things they know: music, swimming, seeing, space
-            - Make them feel like they're becoming wave scientists
-            - End with excitement about learning more
+            - Connect to things they know: mystery boxes, best friends, sentences
+            - Make them feel like they're becoming algebra detectives
+            - Always reference what they can see in the image
+            - End with excitement about learning more algebraic vocabulary
+            
+            REMEMBER: Write 4/y NOT "4 over y" or "four over y"!
             """
             
             types_text = self.generate_text_with_gemini(types_prompt)
-            print(f"📚 Types of waves explanation generated: {len(types_text)} characters")
+            print(f"📚 Algebraic vocabulary explanation generated: {len(types_text)} characters")
             
             # Add to transcript
-            self.add_to_transcript("types_of_waves", types_text)
+            self.add_to_transcript("algebraic_vocabulary", types_text)
             
             synthesis_thread = self.synthesize_and_stream_text(types_text)
             synthesis_thread.join()
-            print("✅ Types of waves explanation completed!")
+            print("✅ Algebraic vocabulary explanation completed!")
             
             # Wait for audio to finish
             while not self.audio_queue.empty():
@@ -935,179 +1193,340 @@ class PhysicsLectureStreamer:
             if not self.wait_if_paused():
                 return  # Lecture was stopped while paused
             
-            # Q&A for types of waves
-            self.handle_qa_session("types of waves")
+            # Q&A for algebraic vocabulary
+            self.handle_qa_session("algebraic vocabulary")
             time.sleep(1.0)
             
-            # 4. Medium vs vacuum
-            print("\n📚 SECTION 4: MEDIUM VS VACUUM")
+            # SLIDE 4: Substitution Machine Diagram (algebra_2.png)
+            print("\n📚 SLIDE 4: SUBSTITUTION MACHINE DIAGRAM")
             print("-" * 30)
-            self.current_lecture_section = "medium_vs_vacuum"
+            self.current_lecture_section = "substitution_image"
             self.current_section_index = 3
-            self.section_start_times["medium_vs_vacuum"] = datetime.now()
+            self.section_start_times["substitution_image"] = datetime.now()
             
-            medium_prompt = """
-            Generate a super exciting explanation of how waves travel through different materials for Class 7 Physics students! 
+            # Load the substitution machine image
+            self.load_and_display_image("algebra_2.png")
+            
+            substitution_image_prompt = """
+            🚨🚨🚨 CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+            YOU MUST WRITE: 20/x + 2, x = 5, 20/5 + 2, 20/5 = 4 (using symbols)
+            YOU MUST NOT WRITE: "20 over x", "twenty over x", "x equals 5" 
+            
+            EXAMPLES OF CORRECT FORMAT:
+            ✅ "The rule is 20/x + 2"
+            ✅ "When x = 5, we calculate 20/5 + 2"
+            ✅ "The result is 20/5 = 4, and 4 + 2 = 6"
+            ✅ "The machine shows 20/x + 2"
+            
+            EXAMPLES OF WRONG FORMAT (NEVER USE THESE):
+            ❌ "The rule is 20 over x plus 2"
+            ❌ "When x equals 5, we calculate 20 over 5"
+            ❌ "The result is twenty over five equals four"
+            ❌ "The machine shows twenty over x"
+            
+            The Math Wall automatically converts 20/x to speech. YOU just write the symbols!
+            
+            Generate a super exciting explanation of the substitution machine shown in the image! 
             The explanation should:
             - Be 150-200 words
-            - Start with something like "This is where it gets REALLY interesting!"
-            - Explain mechanical waves as "waves that need a ride" - like sound needing air to travel
-            - Explain electromagnetic waves as "waves that are super independent" - like light traveling through empty space
-            - Give the cool space example: "Imagine you're an astronaut in space - you can't hear anything because there's no air for sound to travel through!"
-            - Give the amazing light example: "But you can still see stars because light doesn't need air - it's super independent!"
-            - Use phrases like "isn't that incredible?", "how mind-blowing is that?", "you're learning something amazing!"
-            - Make it feel like they're discovering space secrets
+            - Start with something like "Look at this amazing algebra machine! It's like a magical calculator!"
+            - Explain the machine: "The blue question mark block represents our mystery variable x, and the yellow circle shows 5 is the value we're substituting"
+            - Describe the process: "The red funnel is where we pour in our numbers, and the red gear does all the mathematical work"
+            
+            🚨 WRITE EXACTLY LIKE THIS:
+            "The whiteboard shows our rule: 20/x + 2. When x = 5, the machine calculates 20/5 + 2. The green box shows 6! Because 20/5 = 4, and 4 + 2 = 6."
+            
+            NOT LIKE THIS: "The whiteboard shows twenty over x plus two" ❌
+            
+            - Use phrases like "isn't this incredible?", "how cool is this algebra machine?", "you're learning to use mathematical tools!"
+            - Make it feel like they're operating a real mathematical machine
             - Use energetic language with exclamation marks!
-            - Connect to space movies, astronauts, stars, the sun
-            - Make them feel like they're becoming space scientists
-            - End with excitement about real-world examples
+            - Connect to things they know: machines, calculators, funnels, gears
+            - End with excitement about solving more substitution problems
+            
+            REMEMBER: Write 20/x + 2 NOT "20 over x plus 2"!
             """
             
-            medium_text = self.generate_text_with_gemini(medium_prompt)
-            print(f"📚 Medium vs vacuum explanation generated: {len(medium_text)} characters")
+            substitution_image_text = self.generate_text_with_gemini(substitution_image_prompt)
+            print(f"📚 Substitution image explanation generated: {len(substitution_image_text)} characters")
             
             # Add to transcript
-            self.add_to_transcript("medium_vs_vacuum", medium_text)
+            self.add_to_transcript("substitution_image", substitution_image_text)
             
-            synthesis_thread = self.synthesize_and_stream_text(medium_text)
+            synthesis_thread = self.synthesize_and_stream_text(substitution_image_text)
             synthesis_thread.join()
-            print("✅ Medium vs vacuum explanation completed!")
+            print("✅ Substitution image explanation completed!")
             
             # Wait for audio to finish
             while not self.audio_queue.empty():
                 time.sleep(0.1)
             time.sleep(2.0)
             
-            # Check for pause after section completion
-            if not self.wait_if_paused():
-                return  # Lecture was stopped while paused
-            
-            # Q&A for medium vs vacuum
-            self.handle_qa_session("how waves travel through different materials")
+            # Q&A for substitution machine
+            self.handle_qa_session("substitution machine")
             time.sleep(1.0)
             
-            # 5. Real-world examples
-            print("\n📚 SECTION 5: REAL-WORLD EXAMPLES")
+            # SLIDE 5: Inverse Operations
+            print("\n📚 SLIDE 5: INVERSE OPERATIONS")
             print("-" * 30)
-            self.current_lecture_section = "real_world_examples"
+            self.current_lecture_section = "inverse_operations"
             self.current_section_index = 4
-            self.section_start_times["real_world_examples"] = datetime.now()
+            self.section_start_times["inverse_operations"] = datetime.now()
             
             examples_prompt = """
-            Generate super exciting real-world examples of waves for Class 7 Physics students! 
+            🚨🚨🚨 CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+            YOU MUST WRITE: 3x, y/4, 2x = 10, x = 5, x/3 = 4, x = 12 (using symbols)
+            YOU MUST NOT WRITE: "three x", "y over 4", "two x equals ten" 
+            
+            EXAMPLES OF CORRECT FORMAT:
+            ✅ "If you have 3x, divide by 3"
+            ✅ "If you have y/4, multiply by 4"
+            ✅ "To solve 2x = 10, divide both sides by 2 to get x = 5"
+            ✅ "To solve x/3 = 4, multiply both sides by 3 to get x = 12"
+            
+            EXAMPLES OF WRONG FORMAT (NEVER USE THESE):
+            ❌ "If you have three x, divide by three"
+            ❌ "If you have y over four, multiply by four"
+            ❌ "To solve two x equals ten"
+            ❌ "You get x equals five"
+            
+            The Math Wall automatically converts 3x to speech. YOU just write the symbols!
+            
+            Generate super exciting explanation of inverse operations in algebra for Class 7 Mathematics students! 
             The explanation should:
             - Be 150-200 words
-            - Start with something like "Now let's discover waves in YOUR world!"
-            - Give fun examples they can relate to: "The music that makes you dance", "The light that helps you see your favorite colors", "The ripples when you splash in a pool"
-            - Include technology they love: "The radio waves that bring your favorite songs", "The light waves that make your phone screen work", "The sound waves when you talk to friends"
-            - Include nature they experience: "The ocean waves at the beach", "The sound of birds singing", "The light from the sun that helps plants grow"
-            - Use phrases like "isn't that amazing?", "how cool is that?", "you're surrounded by waves everywhere!"
-            - Make it feel like they're discovering a secret world
+            - Start with something like "Now let's discover the secret keys to solving equations!"
+            - Explain inverse operations as "opposite operations that undo each other" - like keys that unlock mysteries
+            
+            🚨 WRITE EXACTLY LIKE THIS:
+            "If you have 3x, divide by 3 to find x. If you have y/4, multiply by 4 to find y. To solve 2x = 10, divide both sides by 2 to get x = 5."
+            
+            NOT LIKE THIS: "If you have three x, divide by three" ❌
+            
+            - Use the balance analogy: "An equation is like a balanced scale - whatever you do to one side, you must do to the other"
+            - Show more examples: 5x = 25, x/2 = 7, 4x = 20
+            - Use phrases like "isn't that amazing?", "how cool is that?", "you're learning the secret to solving any equation!"
+            - Make it feel like they're discovering mathematical superpowers
             - Use energetic language with exclamation marks!
-            - Connect to things they love: music, phones, beaches, nature
-            - Make them feel like they're becoming wave detectives
-            - End with excitement about learning to read wave diagrams
+            - Connect to things they know: keys, locks, scales, balance
+            - Make them feel like they're becoming equation-solving experts
+            - End with excitement about solving real algebraic equations
+            
+            REMEMBER: Write 2x = 10 NOT "two x equals ten"!
             """
             
             examples_text = self.generate_text_with_gemini(examples_prompt)
-            print(f"📚 Real-world examples generated: {len(examples_text)} characters")
+            print(f"📚 Inverse operations explanation generated: {len(examples_text)} characters")
             
             # Add to transcript
-            self.add_to_transcript("real_world_examples", examples_text)
+            self.add_to_transcript("inverse_operations", examples_text)
             
             synthesis_thread = self.synthesize_and_stream_text(examples_text)
             synthesis_thread.join()
-            print("✅ Real-world examples completed!")
+            print("✅ Inverse operations explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
             
             # Check for pause after section completion
             if not self.wait_if_paused():
                 return  # Lecture was stopped while paused
             
-            # Wait for audio to finish
-            while not self.audio_queue.empty():
-                time.sleep(0.1)
-            time.sleep(2.0)
-            
-            # Q&A for real-world examples
-            self.handle_qa_session("real-world examples of waves")
+            # Q&A for inverse operations
+            self.handle_qa_session("inverse operations")
             time.sleep(1.0)
             
-            # 6. Diagram explanation
-            print("\n📚 SECTION 6: DIAGRAM EXPLANATION")
+            # SLIDE 6: Word Problem Translation Diagram (algebra_3.png)
+            print("\n📚 SLIDE 6: WORD PROBLEM TRANSLATION DIAGRAM")
             print("-" * 30)
-            self.current_lecture_section = "diagram_explanation"
+            self.current_lecture_section = "word_problem_image"
             self.current_section_index = 5
-            self.section_start_times["diagram_explanation"] = datetime.now()
+            self.section_start_times["word_problem_image"] = datetime.now()
             
-            # Try to load a wave diagram image
-            self.load_and_display_image("image1.png")
+            # Load the translation machine image
+            self.load_and_display_image("algebra_3.png")
             
-            diagram_prompt = """
-            Generate a super exciting explanation of wave diagrams for Class 7 Physics students! 
+            word_problem_prompt = """
+            🚨🚨🚨 CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+            YOU MUST WRITE: x/6 = 7, y/5 = 3, d/2, x = 42 (using symbols)
+            YOU MUST NOT WRITE: "x over 6 equals 7", "x over six", "d over 2" 
+            
+            EXAMPLES OF CORRECT FORMAT:
+            ✅ "The whiteboard shows x/6 = 7"
+            ✅ "The machine outputs x/6 = 7"
+            ✅ "The equation is x/6 = 7"
+            ✅ "Another example: y/5 = 3"
+            
+            EXAMPLES OF WRONG FORMAT (NEVER USE THESE):
+            ❌ "The whiteboard shows x over 6 equals 7"
+            ❌ "The machine outputs x over six equals seven"
+            ❌ "The equation is x over six equals seven"
+            ❌ "Another example: y over five equals three"
+            
+            The Math Wall automatically converts x/6 to speech. YOU just write the symbols!
+            
+            Generate a super exciting explanation of the word problem translation machine shown in the image! 
             The explanation should:
             - Be 150-200 words
-            - Start with something like "Now you're going to learn to read the secret language of waves!"
-            - Explain wave diagrams as "pictures that show us how waves dance and move"
-            - Describe wave properties in fun ways: "The crest is like the top of a mountain", "The trough is like the bottom of a valley", "The wavelength is like the distance between two mountains"
-            - Use fun analogies: "Think of it like reading a music sheet for waves", "It's like having a map of how energy travels"
-            - Use phrases like "isn't this incredible?", "you're learning to read nature's secret code!", "how amazing is that?"
-            - Make it feel like they're becoming wave scientists
+            - Start with something like "Look at this incredible MATH-IFIER machine! It turns words into math!"
+            - Explain the input: "The blue speech bubble says 'A number divided by 6 equals 7' - that's our word problem"
+            - Describe the machine: "The MATH-IFIER machine has gears and pipes that process the words and turn them into mathematical symbols"
+            - Explain the translation: "The machine takes 'A number' and turns it into x, processes 'divided by 6' and 'equals 7' to create the equation"
+            
+            🚨 WRITE EXACTLY LIKE THIS:
+            "The whiteboard shows the final equation: x/6 = 7. If the problem says 'A number divided by 5 equals 3', the machine outputs y/5 = 3."
+            
+            NOT LIKE THIS: "The whiteboard shows x over six equals seven" ❌
+            
+            - Use phrases like "isn't this incredible?", "how amazing is this translation machine?", "you're learning to speak the language of mathematics!"
+            - Make it feel like they're using a magical word-to-math converter
             - Use energetic language with exclamation marks!
-            - Connect to things they know: mountains, valleys, music, maps
-            - Make them feel like they're unlocking a superpower
-            - End with excitement about understanding wave measurements
+            - Connect to things they know: translators, machines, converting languages
+            - End with excitement about translating more word problems into equations
+            
+            REMEMBER: Write x/6 = 7 NOT "x over 6 equals 7"!
             """
             
-            diagram_text = self.generate_text_with_gemini(diagram_prompt)
-            print(f"📚 Diagram explanation generated: {len(diagram_text)} characters")
+            word_problem_text = self.generate_text_with_gemini(word_problem_prompt)
+            print(f"📚 Word problem translation explanation generated: {len(word_problem_text)} characters")
             
             # Add to transcript
-            self.add_to_transcript("diagram_explanation", diagram_text)
-            # Add a short ending lecture message after the diagram explanation
-            ending_message = "Great job exploring wave diagrams! Keep practicing and you'll master wave science in no time!"
-            self.add_to_transcript("lecture_ending", ending_message)
+            self.add_to_transcript("word_problem_image", word_problem_text)
             
-            synthesis_thread = self.synthesize_and_stream_text(diagram_text)
+            synthesis_thread = self.synthesize_and_stream_text(word_problem_text)
             synthesis_thread.join()
-            print("✅ Diagram explanation completed!")
+            print("✅ Word problem translation explanation completed!")
             
             # Wait for audio to finish
             while not self.audio_queue.empty():
                 time.sleep(0.1)
             time.sleep(2.0)
             
-            # Q&A for diagram explanation
-            self.handle_qa_session("wave diagrams")
+            # Q&A for word problems
+            self.handle_qa_session("word problem translation")
             time.sleep(1.0)
             
-            # 7. Ending Lecture Slide
-            print("\n📚 SECTION 7: ENDING LECTURE")
+            # SLIDE 7: Real-World Application Diagram (algebra_4.png)
+            print("\n📚 SLIDE 7: REAL-WORLD APPLICATION DIAGRAM")
             print("-" * 30)
-            self.current_lecture_section = "ending_lecture"
+            self.current_lecture_section = "real_world_image"
             self.current_section_index = 6
-            self.section_start_times["ending_lecture"] = datetime.now()
+            self.section_start_times["real_world_image"] = datetime.now()
+            
+            # Load the phone bill image
+            self.load_and_display_image("algebra_4.png")
+            
+            real_world_prompt = """
+            🚨🚨🚨 CRITICAL RULE - READ THIS FIRST 🚨🚨🚨
+            YOU MUST WRITE: 10 + d/2, d = 14, d/2 = 7, 10 + 7 = 17 (using symbols)
+            YOU MUST NOT WRITE: "ten plus d over 2", "d over two", "d equals 14" 
+            
+            EXAMPLES OF CORRECT FORMAT:
+            ✅ "Your total bill is 10 + d/2"
+            ✅ "If d = 14, then d/2 = 7"
+            ✅ "So 10 + 7 = 17"
+            ✅ "If d = 20, then d/2 = 10, so 10 + 10 = 20"
+            
+            EXAMPLES OF WRONG FORMAT (NEVER USE THESE):
+            ❌ "Your total bill is ten plus d over two"
+            ❌ "If d equals fourteen, then d over two equals seven"
+            ❌ "So ten plus seven equals seventeen"
+            ❌ "If d equals twenty"
+            
+            The Math Wall automatically converts d/2 to speech. YOU just write the symbols!
+            
+            Generate a super exciting explanation of the phone bill algebraic expression shown in the image! 
+            The explanation should:
+            - Be 150-200 words
+            - Start with something like "Look at this real life algebra problem! It's about your phone bill!"
+            - Explain the components: "The phone icon represents your mobile phone, the blue circle shows 10 is your fixed monthly fee"
+            - Describe the expression: "The plus sign connects the fixed fee to the variable part: d/2"
+            - Explain the variable: "The battery with d inside represents your data usage cost, dividing by 2"
+            
+            🚨 WRITE EXACTLY LIKE THIS:
+            "Your total bill is 10 + d/2. If d = 14, then d/2 = 7, so your total is 10 + 7 = 17. If d = 20, then d/2 = 10, so your total is 10 + 10 = 20."
+            
+            NOT LIKE THIS: "Your total bill is ten plus d over two" ❌
+            
+            - Use phrases like "isn't this incredible?", "how cool is it that algebra helps us understand real bills?", "you're learning to solve everyday problems!"
+            - Make it feel like they're becoming everyday problem solvers
+            - Use energetic language with exclamation marks!
+            - Connect to things they know: phone bills, data usage, money, everyday expenses
+            - End with excitement about using algebra to solve more everyday problems
+            
+            REMEMBER: Write 10 + d/2 NOT "ten plus d over two"!
+            """
+            
+            real_world_text = self.generate_text_with_gemini(real_world_prompt)
+            print(f"📚 Real-world application explanation generated: {len(real_world_text)} characters")
+            
+            # Add to transcript
+            self.add_to_transcript("real_world_image", real_world_text)
+            
+            synthesis_thread = self.synthesize_and_stream_text(real_world_text)
+            synthesis_thread.join()
+            print("✅ Real-world application explanation completed!")
+            
+            # Wait for audio to finish
+            while not self.audio_queue.empty():
+                time.sleep(0.1)
+            time.sleep(2.0)
+            
+            # Q&A for real life applications
+            self.handle_qa_session("real life algebra applications")
+            time.sleep(1.0)
+            
+            # SLIDE 8: Conclusion and Preview
+            print("\n📚 SLIDE 8: CONCLUSION AND PREVIEW")
+            print("-" * 30)
+            self.current_lecture_section = "conclusion"
+            self.current_section_index = 7
+            self.section_start_times["conclusion"] = datetime.now()
 
             ending_prompt = """
-            Write a 10-20 line ending message for a Class 7 Physics lesson on waves. The message should:
+            🚨🚨🚨 BULLETPROOF MATH NOTATION RULE - ZERO TOLERANCE 🚨🚨🚨
+            - MANDATORY: Use ONLY mathematical symbols: x/5, 2x = 10, x = 5, y/3 = 4, 3x = 15, x/4 = 7
+            - FORBIDDEN: Word descriptions like "x over five", "two x equals ten", "x equals five", "three x equals fifteen"
+            - ENFORCEMENT: Post-processing will automatically fix any violations
+            - EXAMPLES: Write "x/5" NOT "x over five", Write "2x = 10" NOT "two x equals ten"
+            - PENALTY: Any word descriptions will be corrected by the system
+            
+            Write a 10-20 line ending message for a Class 7 Mathematics lesson on Algebra Level 1: The Language of Division. The message should:
             - Congratulate the student for completing the lesson
-            - Summarize the key points about waves (energy, types, properties, real-world examples, diagrams)
-            - Encourage curiosity and further exploration
+            - Summarize the key points about algebra (fraction bar notation, variables, constants, terms, substitution, inverse operations)
+            - When mentioning examples, use ONLY symbols: x/5, 20/x + 2, 2x = 10, x = 5
+            - Encourage curiosity and further exploration of mathematics
             - Use energetic, positive, and motivating language
-            - Make the student feel proud and excited to learn more science
-            - End with a call to action, like "Keep exploring!" or "You're a wave wizard now!"
+            - Make the student feel proud and excited to learn more algebra
+            - End with a call to action, like "Keep solving!" or "You're an algebra expert now!"
             - Be friendly, concise, and fun
+            - Mention that they're ready for Level 2: Solving Equations
+            - Preview Level 2 with examples using ONLY symbols: "Next, you'll solve equations like 3x = 15 and x/4 = 7"
+            - CRITICAL: Every mathematical expression MUST use symbols, never words
             """
             ending_text = self.generate_text_with_gemini(ending_prompt)
             print(f"📚 Ending lecture message generated: {len(ending_text)} characters")
-            self.add_to_transcript("ending_lecture", ending_text)
+            self.add_to_transcript("conclusion", ending_text)
             synthesis_thread = self.synthesize_and_stream_text(ending_text)
             synthesis_thread.join()
-            print("✅ Ending lecture completed!")
+            print("✅ Conclusion completed!")
+            
+            # Wait for audio to finish
             while not self.audio_queue.empty():
                 time.sleep(0.1)
             time.sleep(2.0)
+            
+            # Check for pause after section completion
+            if not self.wait_if_paused():
+                return  # Lecture was stopped while paused
+            
+            # Final Q&A
+            self.handle_qa_session("algebra and next steps")
+            time.sleep(1.0)
 
-            print("\n🎓 Complete Physics lecture delivered successfully!")
+            print("\n🎓 Complete Algebra Level 1 lecture delivered successfully!")
             print("=" * 60)
             
             # Clear any remaining audio in queue for clean finish
@@ -1353,7 +1772,7 @@ class PhysicsLectureStreamer:
             
             # Generate flashcards using Gemini
             flashcard_prompt = f"""
-            Based on this Class 7 Physics lecture about waves, create {num_cards} educational flashcards for revision.
+            Based on this Class 7 Mathematics lecture about algebra, create {num_cards} educational flashcards for revision.
             
             Lecture Content:
             {full_lecture_content}
@@ -1364,6 +1783,7 @@ class PhysicsLectureStreamer:
             - Have clear, concise questions and answers
             - Include definitions, examples, and key concepts
             - Mix different types of questions (definition, example, explanation)
+            - Use mathematical notation (e.g., x/5, 20/x + 2, x = 7) NOT word descriptions
             
             Format each flashcard as:
             CARD [number]:
@@ -1371,12 +1791,13 @@ class PhysicsLectureStreamer:
             A: [Answer]
             
             Make sure to cover:
-            - What are waves
-            - Types of waves (mechanical vs electromagnetic)
-            - Medium vs vacuum concepts
-            - Real-world examples
-            - Wave properties
-            - Important definitions
+            - What is algebra and algebraic notation
+            - The fraction bar notation (/)
+            - Variables, constants, and terms
+            - Substitution and evaluation
+            - Inverse operations
+            - Translating word problems to algebra
+            - Everyday life applications
             
             Create exactly {num_cards} flashcards.
             """
@@ -1412,7 +1833,7 @@ class PhysicsLectureStreamer:
                         "answer": answer.strip(),
                         "topic": self.categorize_flashcard_topic(question),
                         "difficulty": "beginner",
-                        "subject": "Physics",
+                        "subject": "Mathematics",
                         "class_level": "Class 7"
                     }
                     flashcards.append(flashcard)
@@ -1426,119 +1847,10 @@ class PhysicsLectureStreamer:
                         flashcards.append(card)
             
             flashcard_set = {
-                "title": "Physics Waves - Revision Flashcards",
+                "title": "Algebra Level 1 - Revision Flashcards",
                 "class_level": "Class 7",
-                "subject": "Physics",
-                "topic": "Introduction to Waves",
-                "total_cards": len(flashcards),
-                "flashcards": flashcards[:num_cards],  # Limit to requested number
-                "generated_at": datetime.now().isoformat(),
-                "difficulty_level": "beginner"
-            }
-            
-            print(f"🎴 Generated {len(flashcards)} flashcards successfully")
-            return flashcard_set
-            
-        except Exception as e:
-            print(f"❌ Error generating flashcards: {e}")
-            return {
-                "error": f"Failed to generate flashcards: {str(e)}",
-                "flashcards": []
-            }
-    
-    def generate_flashcards(self, num_cards=10):
-        """Generate flashcards based on the lecture content"""
-        if not self.transcript:
-            return {
-                "error": "No lecture content available for flashcards",
-                "flashcards": []
-            }
-        
-        try:
-            # Combine all lecture content
-            full_lecture_content = ""
-            for entry in self.transcript:
-                full_lecture_content += f"\n{entry['section']}: {entry['text']}\n"
-            
-            # Generate flashcards using Gemini
-            flashcard_prompt = f"""
-            Based on this Class 7 Physics lecture about waves, create {num_cards} educational flashcards for revision.
-            
-            Lecture Content:
-            {full_lecture_content}
-            
-            Create flashcards that:
-            - Cover the most important concepts from the lecture
-            - Are suitable for 12-13 year old students
-            - Have clear, concise questions and answers
-            - Include definitions, examples, and key concepts
-            - Mix different types of questions (definition, example, explanation)
-            
-            Format each flashcard as:
-            CARD [number]:
-            Q: [Question]
-            A: [Answer]
-            
-            Make sure to cover:
-            - What are waves
-            - Types of waves (mechanical vs electromagnetic)
-            - Medium vs vacuum concepts
-            - Real-world examples
-            - Wave properties
-            - Important definitions
-            
-            Create exactly {num_cards} flashcards.
-            """
-            
-            flashcards_text = self.generate_text_with_gemini(flashcard_prompt)
-            
-            # Parse flashcards from the response
-            flashcards = []
-            card_sections = flashcards_text.split("CARD")
-            
-            for i, section in enumerate(card_sections[1:], 1):  # Skip first empty section
-                lines = section.strip().split('\n')
-                question = ""
-                answer = ""
-                
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith('Q:'):
-                        question = line[2:].strip()
-                    elif line.startswith('A:'):
-                        answer = line[2:].strip()
-                    elif question and not answer and not line.startswith(('Q:', 'A:', str(i+1))):
-                        # Multi-line question
-                        question += " " + line
-                    elif answer and not line.startswith(('Q:', 'A:', str(i+1))):
-                        # Multi-line answer
-                        answer += " " + line
-                
-                if question and answer:
-                    flashcard = {
-                        "id": i,
-                        "question": question.strip(),
-                        "answer": answer.strip(),
-                        "topic": self.categorize_flashcard_topic(question),
-                        "difficulty": "beginner",
-                        "subject": "Physics",
-                        "class_level": "Class 7"
-                    }
-                    flashcards.append(flashcard)
-            
-            # If we don't have enough flashcards, generate some fallback ones
-            while len(flashcards) < min(num_cards, 8):
-                fallback_cards = self.generate_fallback_flashcards()
-                for card in fallback_cards:
-                    if len(flashcards) < num_cards:
-                        card["id"] = len(flashcards) + 1
-                        flashcards.append(card)
-            
-            flashcard_set = {
-                "title": "Physics Waves - Revision Flashcards",
-                "class_level": "Class 7",
-                "subject": "Physics",
-                "topic": "Introduction to Waves",
+                "subject": "Mathematics",
+                "topic": "Algebra - The Language of Division",
                 "total_cards": len(flashcards),
                 "flashcards": flashcards[:num_cards],  # Limit to requested number
                 "generated_at": datetime.now().isoformat(),
@@ -1561,14 +1873,16 @@ class PhysicsLectureStreamer:
         
         if any(word in question_lower for word in ['definition', 'what is', 'what are']):
             return "definitions"
-        elif any(word in question_lower for word in ['example', 'real world', 'everyday']):
+        elif any(word in question_lower for word in ['example', 'real life', 'everyday', 'word problem']):
             return "examples"
-        elif any(word in question_lower for word in ['mechanical', 'electromagnetic', 'types']):
-            return "wave_types"
-        elif any(word in question_lower for word in ['medium', 'vacuum', 'travel']):
-            return "wave_travel"
-        elif any(word in question_lower for word in ['property', 'amplitude', 'frequency']):
-            return "wave_properties"
+        elif any(word in question_lower for word in ['variable', 'constant', 'term', 'vocabulary']):
+            return "algebra_vocabulary"
+        elif any(word in question_lower for word in ['fraction bar', 'notation', '/', 'division']):
+            return "notation"
+        elif any(word in question_lower for word in ['substitution', 'evaluate', 'substitute']):
+            return "substitution"
+        elif any(word in question_lower for word in ['inverse', 'undo', 'opposite']):
+            return "inverse_operations"
         else:
             return "general"
     
@@ -1576,44 +1890,44 @@ class PhysicsLectureStreamer:
         """Generate fallback flashcards if AI generation fails"""
         return [
             {
-                "question": "What is a wave?",
-                "answer": "A wave is a disturbance that carries energy from one place to another without carrying matter.",
+                "question": "What is algebra?",
+                "answer": "Algebra is the language of mathematics that uses letters and symbols to represent numbers and relationships.",
                 "topic": "definitions"
             },
             {
-                "question": "Name two types of waves based on how they travel.",
-                "answer": "Mechanical waves (need a medium) and electromagnetic waves (can travel through vacuum).",
-                "topic": "wave_types"
+                "question": "What does the fraction bar (/) mean in algebra?",
+                "answer": "The fraction bar means division. For example, x/5 means x divided by 5.",
+                "topic": "notation"
             },
             {
-                "question": "Give an example of a mechanical wave.",
-                "answer": "Sound waves, water waves, or earthquake waves (any wave that needs a medium to travel).",
+                "question": "What is a variable in algebra?",
+                "answer": "A variable is a letter (like x or y) that represents an unknown number or value that can change.",
+                "topic": "algebra_vocabulary"
+            },
+            {
+                "question": "What is a constant?",
+                "answer": "A constant is a number that never changes, like 5, 10, or 3.14.",
+                "topic": "algebra_vocabulary"
+            },
+            {
+                "question": "If x = 5, what is 20/x + 2?",
+                "answer": "First substitute: 20/5 + 2. Then calculate: 4 + 2 = 6.",
+                "topic": "substitution"
+            },
+            {
+                "question": "What is the inverse operation of multiplication?",
+                "answer": "Division is the inverse of multiplication. If you multiply by 3, you divide by 3 to undo it.",
+                "topic": "inverse_operations"
+            },
+            {
+                "question": "Give an example of algebra in everyday life.",
+                "answer": "Calculating your total restaurant bill: If your meal costs 10 and you split a dessert of d with your friend, your total is 10 + d/2.",
                 "topic": "examples"
             },
             {
-                "question": "Can sound travel in space? Why or why not?",
-                "answer": "No, sound cannot travel in space because it is a mechanical wave and needs a medium like air to travel.",
-                "topic": "wave_travel"
-            },
-            {
-                "question": "Give an example of an electromagnetic wave.",
-                "answer": "Light waves, radio waves, X-rays, or microwaves (any wave that can travel through vacuum).",
-                "topic": "examples"
-            },
-            {
-                "question": "How does light from the sun reach Earth?",
-                "answer": "Light travels as electromagnetic waves through the vacuum of space to reach Earth.",
-                "topic": "wave_travel"
-            },
-            {
-                "question": "What happens when you throw a stone into water?",
-                "answer": "It creates ripples (water waves) that carry energy outward from where the stone hit the water.",
-                "topic": "examples"
-            },
-            {
-                "question": "Why can't astronauts hear each other speak in space?",
-                "answer": "Because sound waves need air (a medium) to travel, and there is no air in space.",
-                "topic": "wave_travel"
+                "question": "How do you write '20 divided by x plus 2' in algebraic notation?",
+                "answer": "20/x + 2",
+                "topic": "notation"
             }
         ]
     
@@ -1632,11 +1946,12 @@ class PhysicsLectureStreamer:
 
             # Prompt for Gemini
             quiz_prompt = f"""
-            Based on this Class 7 Physics lecture about waves, create a quiz with {num_questions} multiple-choice questions.
+            Based on this Class 7 Mathematics lecture about algebra, create a quiz with {num_questions} multiple-choice questions.
 
             Requirements:
             - Each question should have 4 options (A, B, C, D).
             - The quiz should start easy and get harder (Q1 easiest, Q{num_questions} hardest).
+            - Use mathematical notation (e.g., x/5, 20/x + 2, x = 7) NOT word descriptions like "x over 5"
             - For each question, provide:
                 * The question text
                 * Four options (A, B, C, D)
@@ -1709,10 +2024,10 @@ class PhysicsLectureStreamer:
                         "explain_correct": explain_correct
                     })
             return {
-                "title": "Physics Waves - AI Quiz",
+                "title": "Algebra Level 1 - AI Quiz",
                 "class_level": "Class 7",
-                "subject": "Physics",
-                "topic": "Introduction to Waves",
+                "subject": "Mathematics",
+                "topic": "Algebra - The Language of Division",
                 "total_questions": len(quiz),
                 "quiz": quiz[:num_questions],
                 "generated_at": datetime.now().isoformat()
@@ -1771,7 +2086,7 @@ def main():
     print("=" * 50)
     
     # Create lecture streamer
-    lecture_streamer = PhysicsLectureStreamer(
+    lecture_streamer = AlgebraLectureStreamer(
         gemini_api_key=GEMINI_API_KEY,
         gemini_url=GEMINI_URL
     )
@@ -1813,7 +2128,7 @@ try:
     from config import supabase, SECRET_KEY, ALGORITHM
     
     # Create router for FastAPI
-    router = APIRouter(prefix="/api/lectures/class7/science/physics/waves/level1", tags=["physics-lecture"])
+    router = APIRouter(prefix="/api/lectures/class7/mathematics/algebra/level1", tags=["mathematics-lecture"])
     
     # Global variables for FastAPI app
     app = FastAPI(
@@ -2005,7 +2320,7 @@ try:
         try:
             print("✅ Creating new PhysicsLectureStreamer...")
             # Create lecture streamer
-            lecture_streamer = PhysicsLectureStreamer(
+            lecture_streamer = AlgebraLectureStreamer(
                 gemini_api_key=request.gemini_api_key,
                 gemini_url=request.gemini_url
             )
@@ -2206,7 +2521,7 @@ try:
             note_data = {
                 "user_id": user_data.id,
                 "content": note_request.content,
-                "lecture_type": "physics_waves_level1",
+                "lecture_type": "mathematics_algebra_level1",
                 "lecture_section": lecture_section,
                 "lecture_timestamp": datetime.now().isoformat()
             }
@@ -2242,7 +2557,7 @@ try:
                 raise HTTPException(status_code=404, detail="User not found")
             
             # Build query
-            query = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True)
+            query = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "mathematics_algebra_level1").eq("is_active", True)
             
             # Add section filter if provided
             if section:
@@ -2276,7 +2591,7 @@ try:
                 raise HTTPException(status_code=404, detail="User not found")
             
             # Get user's notes for this lecture type
-            result = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True).order("created_at", desc=True).execute()
+            result = supabase_service.table("user_notes").select("*").eq("user_id", user_data.id).eq("lecture_type", "mathematics_algebra_level1").eq("is_active", True).order("created_at", desc=True).execute()
             
             # Organize notes by section
             notes_by_section = {}
@@ -2383,7 +2698,7 @@ try:
             result = supabase_service.table("user_notes").update({
                 "is_active": False,
                 "updated_at": datetime.now().isoformat()
-            }).eq("user_id", user_data.id).eq("lecture_type", "physics_waves_level1").eq("is_active", True).execute()
+            }).eq("user_id", user_data.id).eq("lecture_type", "mathematics_algebra_level1").eq("is_active", True).execute()
             
             notes_cleared = len(result.data) if result.data else 0
             
@@ -2410,7 +2725,7 @@ try:
                     "audio_paused": False,
                     "current_section": None,
                     "current_section_index": 0,
-                    "total_sections": 7,
+                    "total_sections": 8,
                     "progress_percentage": 0
                 }
             }
@@ -2626,7 +2941,11 @@ try:
                     "has_diagram": diagram_info is not None,
                     "current_section": current_section,
                     "diagram_info": diagram_info,
-                    "should_show_overlay": current_section == "diagram_explanation" and diagram_info is not None
+                    "should_show_overlay": (current_section == "diagram_explanation" or 
+                                           current_section == "substitution_image" or 
+                                           current_section == "word_problem_image" or 
+                                           current_section == "real_world_image" or 
+                                           current_section == "algebraic_vocabulary") and diagram_info is not None
                 }
             }
             
@@ -2855,10 +3174,10 @@ try:
             # Format data for saving
             lecture_data = {
                 "user_id": user_id,
-                "title": "Physics Waves - Level 1",
-                "subject": "Physics",
+                "title": "Algebra - Level 1: The Language of Division",
+                "subject": "Mathematics",
                 "class_level": "Class 7",
-                "topic": "Introduction to Waves",
+                "topic": "Algebra - The Language of Division",
                 "saved_at": datetime.now().isoformat(),
                 "transcript": transcript_data,
                 "qa_interactions": qa_data.get("data", {}).get("qa_transcript", []),
@@ -3004,10 +3323,10 @@ try:
             # Format data for saving
             lecture_data = {
                 "user_email": user_data.email,  # Use email for custom auth
-                "title": "Physics Waves - Level 1",
-                "subject": "Physics",
+                "title": "Algebra - Level 1: The Language of Division",
+                "subject": "Mathematics",
                 "class_level": "Class 7",
-                "topic": "Introduction to Waves",
+                "topic": "Algebra - The Language of Division",
                 "saved_at": datetime.now().isoformat(),
                 "transcript": {
                     "sections": transcript_data.get("sections", []),
@@ -3126,7 +3445,7 @@ try:
                 raise HTTPException(status_code=404, detail="Lecture streamer not available")
             
             # Get the current diagram image
-            image_path = os.path.join(lecture_streamer.images_folder, "image1.png")
+            image_path = os.path.join(lecture_streamer.images_folder, "algebra_1.png")
             
             if not os.path.exists(image_path):
                 raise HTTPException(status_code=404, detail="Diagram image not found")
@@ -3138,7 +3457,7 @@ try:
                 "status": "success",
                 "data": {
                     "labels": labels,
-                    "image_filename": "image1.png",
+                    "image_filename": "algebra_1.png",
                     "total_labels": len(labels)
                 }
             }
@@ -3283,7 +3602,7 @@ try:
             lecture_streamer.interactive_transcript = []
             
             # Analyze diagram for labels
-            image_path = os.path.join(lecture_streamer.images_folder, "image1.png")
+            image_path = os.path.join(lecture_streamer.images_folder, "algebra_1.png")
             labels = await analyze_diagram_labels(image_path)
             
             # Store labels in lecture streamer
@@ -3297,7 +3616,7 @@ try:
                 "data": {
                     "is_active": True,
                     "labels": labels,
-                    "image_filename": "image1.png",
+                    "image_filename": "algebra_1.png",
                     "message": f"Interactive diagram activated with {len(labels)} labels - Queue cleared for immediate TTS"
                 }
             }
@@ -3381,18 +3700,20 @@ try:
                 import base64
                 image_data = base64.b64encode(image_file.read()).decode('utf-8')
             
-            # Create AI prompt for diagram analysis
+            # Create AI prompt for algebra diagram analysis
             analysis_prompt = f"""
-            Analyze this wave diagram image and identify the key elements that should be labeled for educational purposes.
+            Analyze this algebra diagram image and identify the key mathematical elements that should be labeled for educational purposes.
             
             Please identify:
-            1. Wave properties (wavelength, amplitude, frequency, etc.)
-            2. Wave features (crests, troughs, equilibrium line, etc.)
-            3. Any other important elements visible in the diagram
+            1. Mathematical expressions and equations
+            2. Variables, constants, and terms
+            3. Mathematical symbols and operations (+, -, ×, ÷, =, etc.)
+            4. Visual representations of mathematical concepts
+            5. Any other important mathematical elements visible in the diagram
             
             For each identified element, provide:
             - A clear, educational name
-            - A brief description of what it represents
+            - A brief description of what it represents mathematically
             - Suggested position coordinates (x, y as percentages)
             - A unique color code for visual distinction
             
@@ -3537,7 +3858,7 @@ try:
             2. Use simple, relatable examples (like ocean waves, sound, light)
             3. Explain what this property means in simple terms
             4. Mention how it's measured or observed
-            5. Connect it to real-world applications
+            5. Connect it to everyday applications
             6. Be about 2-3 sentences long
             
             Make it fun and memorable! Use analogies that a 7th grader would understand.

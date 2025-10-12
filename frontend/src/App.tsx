@@ -38,6 +38,10 @@ import SpacePhysics from "./classes/Class7/Science/Physics/SpacePhysics";
 import PhysicsWavesLevel1 from "./classes/Class7/Science/Physics/Waves/Level1";
 import FlashcardPage from "./classes/Class7/Science/Physics/Waves/Level1/FlashcardPage";
 import QuizPage from "./classes/Class7/Science/Physics/Waves/Level1/QuizPage";
+import Algebra from "./classes/Class7/Mathematics/Algebra";
+import AlgebraLevel1 from "./classes/Class7/Mathematics/Algebra/Level1";
+import AlgebraFlashcardPage from "./classes/Class7/Mathematics/Algebra/Level1/FlashcardPage";
+import AlgebraQuizPage from "./classes/Class7/Mathematics/Algebra/Level1/QuizPage";
 import AiDoubtSolverChatbox from "./components/AiDoubtSolverChatbox";
 import RevisionBook from "./components/RevisionBook";
 import NotesPage from "./components/NotesPage";
@@ -289,6 +293,22 @@ function App() {
           <Route
             path="/ai-teacher/class7/science/physics/waves/level1/quiz"
             element={<QuizPage />}
+          />
+          <Route
+            path="/ai-teacher/class7/mathematics/algebra"
+            element={<Algebra />}
+          />
+          <Route
+            path="/ai-teacher/class7/mathematics/algebra/level1"
+            element={<AlgebraLevel1 />}
+          />
+          <Route
+            path="/ai-teacher/class7/mathematics/algebra/level1/flashcards"
+            element={<AlgebraFlashcardPage />}
+          />
+          <Route
+            path="/ai-teacher/class7/mathematics/algebra/level1/quiz"
+            element={<AlgebraQuizPage />}
           />
           <Route
             path="/doubt-solver"

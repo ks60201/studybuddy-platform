@@ -7,6 +7,7 @@ import auth
 import connection
 import notes_api
 from lectures.class7.science.physics.waves.level1 import router as physics_lecture_router
+from lectures.class7.mathematics.algebra.level1.level1 import router as mathematics_algebra_router
 from ai_doubt_solver import router as ai_doubt_solver_router
 
 # Initialize FastAPI app
@@ -35,6 +36,7 @@ app.include_router(auth.router)
 app.include_router(connection.router)
 app.include_router(notes_api.router)
 app.include_router(physics_lecture_router)
+app.include_router(mathematics_algebra_router)
 app.include_router(ai_doubt_solver_router)
 
 @app.get("/")
