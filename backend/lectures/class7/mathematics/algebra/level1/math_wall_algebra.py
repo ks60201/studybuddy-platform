@@ -196,7 +196,7 @@ class MathWallAlgebra:
             '⌋': ' ',
             '⌈': ' ceiling of ',
             '⌉': ' ',
-            '!': ' factorial ',  # Context-dependent
+            '!': '',  # Removed - say nothing for exclamation marks
         }
         
         # 📊 Exponents and powers (EXPANDED)
@@ -383,17 +383,19 @@ class MathWallAlgebra:
     def _convert_functions(self, text: str) -> str:
         """Convert mathematical functions and symbols"""
         for symbol, word in self.functions.items():
-            # Special handling for factorial (!) - only convert when it follows a number
+            # Special handling for factorial (!) - remove it completely
             if symbol == '!':
-                # Only replace ! with "factorial" when it follows a digit
-                text = re.sub(r'(\d+)!', r'\1 factorial', text)
+                # Remove all exclamation marks
+                text = text.replace('!', '')
             # Special handling for Euler's number (e) - only convert when standalone
             elif symbol == 'e':
                 # Only replace 'e' with ' e ' when it's standalone (not part of a word)
                 # Pattern: standalone 'e' surrounded by spaces, punctuation, or start/end
                 text = re.sub(r'(?<![a-zA-Z])e(?![a-zA-Z])', ' e ', text)
             else:
-                text = text.replace(symbol, word)
+                # Skip '!' in general replacement since it has special handling above
+                if symbol != '!':
+                    text = text.replace(symbol, word)
         return text
     
     def _convert_exponents(self, text: str) -> str:

@@ -1,12 +1,16 @@
-/* Notes Manager - Full Notion-like Experience */
+/* Modern Notes Manager - Enhanced Design */
 .notes-manager-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(12px);
+  background: linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.8),
+    rgba(15, 23, 42, 0.9)
+  );
+  backdrop-filter: blur(24px);
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -20,32 +24,67 @@
   max-width: 1400px;
   background: linear-gradient(
     135deg,
-    rgba(15, 23, 42, 0.98) 0%,
-    rgba(30, 41, 59, 0.98) 50%,
-    rgba(15, 23, 42, 0.98) 100%
+    rgba(15, 23, 42, 0.95) 0%,
+    rgba(30, 41, 59, 0.95) 50%,
+    rgba(15, 23, 42, 0.95) 100%
   );
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 20px;
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(59, 130, 246, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(32px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
-/* Header */
+.notes-manager::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  animation: headerGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes headerGlow {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modern Header */
 .notes-manager-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 32px;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  padding: 32px 40px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(
     135deg,
-    rgba(59, 130, 246, 0.1),
-    rgba(16, 185, 129, 0.1)
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
   );
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+
+.notes-manager-header::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  opacity: 0.6;
 }
 
 .header-left {
@@ -404,37 +443,63 @@
 }
 
 /* Note Cards */
+/* Modern Note Cards */
 .note-card {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
+  );
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-left: 4px solid;
-  border-radius: 12px;
-  padding: 20px;
-  transition: all 0.2s ease;
+  border-radius: 20px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
   overflow: hidden;
 }
 
+.note-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.note-card:hover::before {
+  opacity: 1;
+}
+
 .note-card:hover {
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(59, 130, 246, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.1)
+  );
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
 .note-card.pinned {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: rgba(245, 158, 11, 0.3);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 215, 0, 0.1),
+    rgba(255, 215, 0, 0.05)
+  );
+  border-color: rgba(255, 215, 0, 0.3);
 }
 
 .note-card.pinned::before {
-  content: "📌";
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 12px;
-  opacity: 0.7;
+  background: linear-gradient(90deg, #ffd700, #ffed4e, #ffd700);
+  opacity: 1;
 }
 
 .note-card-header {

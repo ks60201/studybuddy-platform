@@ -1,5 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  X,
+  Search,
+  Plus,
+  Folder,
+  Layout,
+  List as ListIcon,
+  Save,
+  Pin,
+  PinOff,
+  FileText,
+  Download,
+  Upload,
+  Loader2,
+  NotebookPen,
+  Pause,
+} from "lucide-react";
 import RichTextEditor from "./RichTextEditor";
 import "./NotesManager.css";
 
@@ -630,197 +647,387 @@ const NotesManager: React.FC<NotesManagerProps> = ({
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
         >
-          {/* Header */}
-          <div className="notes-manager-header">
+          {/* Modern Header */}
+          <motion.div
+            className="notes-manager-header"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+          >
             <div className="header-left">
-              <h2 className="notes-title">
-                <span className="notes-icon">📚</span>
+              <motion.h2
+                className="notes-title"
+                whileHover={{ scale: 1.02 }}
+                transition={{ duration: 0.2 }}
+              >
+                <motion.div
+                  className="notes-icon"
+                  animate={{ rotate: [0, 5, -5, 0] }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                >
+                  <NotebookPen size={24} />
+                </motion.div>
                 {standalone ? "My Notes" : "Smart Notes"}
-              </h2>
+              </motion.h2>
               {!standalone && isPaused && (
-                <span className="pause-indicator">
-                  <span className="pause-icon">⏸️</span>
+                <motion.span
+                  className="pause-indicator"
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <motion.div
+                    className="pause-icon"
+                    animate={{ scale: [1, 1.1, 1] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  >
+                    <Pause size={16} />
+                  </motion.div>
                   Lecture Paused
-                </span>
+                </motion.span>
               )}
             </div>
 
-            <div className="header-controls">
-              <div className="view-controls">
-                <button
+            <motion.div
+              className="header-controls"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4, duration: 0.6 }}
+            >
+              <motion.div
+                className="view-controls"
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.5, duration: 0.4 }}
+              >
+                <motion.button
                   className={`view-btn ${viewMode === "grid" ? "active" : ""}`}
                   onClick={() => setViewMode("grid")}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  ▦
-                </button>
-                <button
+                  <Layout size={18} />
+                </motion.button>
+                <motion.button
                   className={`view-btn ${viewMode === "list" ? "active" : ""}`}
                   onClick={() => setViewMode("list")}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  ☰
-                </button>
-              </div>
+                  <ListIcon size={18} />
+                </motion.button>
+              </motion.div>
 
-              <select
+              <motion.select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
                 className="sort-select"
+                whileHover={{ scale: 1.02 }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.6, duration: 0.4 }}
               >
                 <option value="date">Sort by Date</option>
                 <option value="title">Sort by Title</option>
                 <option value="folder">Sort by Folder</option>
-              </select>
+              </motion.select>
 
-              <button className="notes-close-btn" onClick={handleClose}>
-                ✕
-              </button>
-            </div>
-          </div>
+              <motion.button
+                className="notes-close-btn"
+                onClick={handleClose}
+                whileHover={{ scale: 1.1, rotate: 90 }}
+                whileTap={{ scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.7, duration: 0.4 }}
+              >
+                <X size={20} />
+              </motion.button>
+            </motion.div>
+          </motion.div>
 
           {/* Main Content */}
           <div className="notes-manager-content">
-            {/* Sidebar */}
-            <div className="notes-sidebar">
-              {/* Search */}
-              <div className="search-container">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="🔍 Search notes..."
-                  className="search-input"
-                />
-              </div>
+            {/* Modern Sidebar */}
+            <motion.div
+              className="notes-sidebar"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.8, duration: 0.6 }}
+            >
+              {/* Enhanced Search */}
+              <motion.div
+                className="search-container"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9, duration: 0.4 }}
+              >
+                <motion.div
+                  className="search-input-wrapper"
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Search size={18} />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search notes..."
+                    className="search-input"
+                  />
+                </motion.div>
+              </motion.div>
 
-              {/* Folders */}
-              <div className="folders-section">
-                <div className="section-header">
-                  <span>📁 Folders</span>
-                  <button
+              {/* Enhanced Folders */}
+              <motion.div
+                className="folders-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.0, duration: 0.4 }}
+              >
+                <motion.div
+                  className="section-header"
+                  whileHover={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="section-title">
+                    <Folder size={18} />
+                    <span>Folders</span>
+                  </div>
+                  <motion.button
                     onClick={() => setShowNewFolderModal(true)}
                     className="add-folder-btn"
                     title="Add folder"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    +
-                  </button>
-                </div>
+                    <Plus size={16} />
+                  </motion.button>
+                </motion.div>
 
-                <div className="folders-list">
-                  {folders.map((folder) => (
-                    <button
+                <motion.div
+                  className="folders-list"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1.1, duration: 0.4 }}
+                >
+                  {folders.map((folder, index) => (
+                    <motion.button
                       key={folder.id}
                       onClick={() => setSelectedFolder(folder.id)}
                       className={`folder-item ${
                         selectedFolder === folder.id ? "active" : ""
                       }`}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 1.2 + index * 0.1, duration: 0.4 }}
+                      whileHover={{ scale: 1.02, x: 5 }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <span
+                      <motion.div
                         className="folder-icon"
                         style={{ color: folder.color }}
+                        whileHover={{ scale: 1.2 }}
+                        transition={{ duration: 0.2 }}
                       >
                         {folder.icon}
-                      </span>
+                      </motion.div>
                       <span className="folder-name">{folder.name}</span>
-                      <span className="folder-count">{folder.noteCount}</span>
-                    </button>
+                      <motion.span
+                        className="folder-count"
+                        whileHover={{ scale: 1.1 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {folder.noteCount}
+                      </motion.span>
+                    </motion.button>
                   ))}
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
 
-              {/* Quick Actions */}
-              <div className="quick-actions">
-                <button className="quick-action-btn">
-                  <span>📤</span>
+              {/* Enhanced Quick Actions */}
+              <motion.div
+                className="quick-actions"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.3, duration: 0.4 }}
+              >
+                <motion.button
+                  className="quick-action-btn"
+                  whileHover={{ scale: 1.05, x: 5 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Download size={16} />
                   Export Notes
-                </button>
-                <button className="quick-action-btn">
-                  <span>📥</span>
+                </motion.button>
+                <motion.button
+                  className="quick-action-btn"
+                  whileHover={{ scale: 1.05, x: 5 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Upload size={16} />
                   Import Notes
-                </button>
-              </div>
-            </div>
+                </motion.button>
+              </motion.div>
+            </motion.div>
 
-            {/* Main Area */}
-            <div className="notes-main">
-              {/* New Note Section */}
-              <div className="new-note-section">
-                <input
+            {/* Enhanced Main Area */}
+            <motion.div
+              className="notes-main"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.4, duration: 0.6 }}
+            >
+              {/* Enhanced New Note Section */}
+              <motion.div
+                className="new-note-section"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 1.5, duration: 0.4 }}
+              >
+                <motion.input
                   type="text"
                   value={currentTitle}
                   onChange={(e) => setCurrentTitle(e.target.value)}
                   placeholder="Note title..."
                   className="note-title-input"
+                  whileFocus={{ scale: 1.02 }}
+                  transition={{ duration: 0.2 }}
                 />
 
-                <RichTextEditor
-                  value={currentNote}
-                  onChange={setCurrentNote}
-                  placeholder="Start writing your note... Use '/' for commands"
-                  minHeight="150px"
-                />
+                <motion.div
+                  className="editor-container"
+                  whileHover={{ scale: 1.01 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <RichTextEditor
+                    value={currentNote}
+                    onChange={setCurrentNote}
+                    placeholder="Start writing your note... Use '/' for commands"
+                    minHeight="150px"
+                  />
+                </motion.div>
 
-                <div className="new-note-actions">
-                  <button
+                <motion.div
+                  className="new-note-actions"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.6, duration: 0.4 }}
+                >
+                  <motion.button
                     onClick={handleAddNote}
                     disabled={
                       (!currentNote.trim() && !currentTitle.trim()) || isLoading
                     }
                     className="save-note-btn"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {isLoading ? (
                       <>
-                        <div className="loading-spinner-small"></div>
+                        <Loader2 size={16} className="animate-spin" />
                         Saving...
                       </>
                     ) : (
                       <>
-                        <span>💾</span>
+                        <Save size={16} />
                         Save Note
                       </>
                     )}
-                  </button>
-                </div>
-              </div>
+                  </motion.button>
+                </motion.div>
+              </motion.div>
 
-              {/* Notes Grid/List */}
-              <div className={`notes-container ${viewMode}`}>
+              {/* Enhanced Notes Grid/List */}
+              <motion.div
+                className={`notes-container ${viewMode}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 1.7, duration: 0.4 }}
+              >
                 {filteredNotes.length === 0 ? (
-                  <div className="notes-empty">
-                    <span className="empty-icon">📝</span>
+                  <motion.div
+                    className="notes-empty"
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 1.8, duration: 0.4 }}
+                  >
+                    <motion.div
+                      className="empty-icon"
+                      animate={{ rotate: [0, 5, -5, 0] }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                      }}
+                    >
+                      <FileText size={48} />
+                    </motion.div>
                     <h3>No notes found</h3>
                     <p>
                       {searchQuery
                         ? "Try adjusting your search or create a new note"
                         : "Start taking notes to capture key insights!"}
                     </p>
-                  </div>
+                  </motion.div>
                 ) : (
-                  filteredNotes.map((note) => (
+                  filteredNotes.map((note, index) => (
                     <motion.div
                       key={note.id}
                       className={`note-card ${note.isPinned ? "pinned" : ""}`}
                       style={{ borderLeftColor: note.color }}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
+                      initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -20, scale: 0.9 }}
+                      transition={{
+                        delay: 1.8 + index * 0.1,
+                        duration: 0.4,
+                        ease: "easeOut",
+                      }}
                       layout
+                      whileHover={{
+                        scale: 1.02,
+                        y: -5,
+                        transition: { duration: 0.2 },
+                      }}
+                      whileTap={{ scale: 0.98 }}
                     >
-                      <div className="note-card-header">
+                      <motion.div
+                        className="note-card-header"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 1.9 + index * 0.1 }}
+                      >
                         <h4 className="note-card-title">
                           {note.title ||
                             note.content.substring(0, 50) +
                               (note.content.length > 50 ? "..." : "")}
                         </h4>
-                        <div className="note-actions">
-                          <button
+                        <motion.div
+                          className="note-actions"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 2.0 + index * 0.1 }}
+                        >
+                          <motion.button
                             onClick={() => handlePinNote(note.id)}
                             className={`pin-btn ${
                               note.isPinned ? "pinned" : ""
                             }`}
                             title={note.isPinned ? "Unpin" : "Pin"}
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
                           >
-                            📌
-                          </button>
+                            {note.isPinned ? (
+                              <Pin size={16} />
+                            ) : (
+                              <PinOff size={16} />
+                            )}
+                          </motion.button>
                           {/* Temporarily disabled edit functionality
                           <button
                             onClick={() => setEditingNoteId(note.id)}
@@ -830,15 +1037,17 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                             ✏️
                           </button>
                           */}
-                          <button
+                          <motion.button
                             onClick={() => handleDeleteNote(note.id)}
                             className="delete-btn"
                             title="Delete"
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.95 }}
                           >
                             🗑️
-                          </button>
-                        </div>
-                      </div>
+                          </motion.button>
+                        </motion.div>
+                      </motion.div>
 
                       <div className="note-card-content">
                         <div
@@ -861,97 +1070,95 @@ const NotesManager: React.FC<NotesManagerProps> = ({
                     </motion.div>
                   ))
                 )}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
+        </motion.div>
 
-          {/* New Folder Modal */}
-          {showNewFolderModal && (
-            <div className="modal-overlay">
-              <div className="modal">
-                <div className="modal-header">
-                  <h3>Create New Folder</h3>
-                  <button onClick={() => setShowNewFolderModal(false)}>
-                    ✕
-                  </button>
-                </div>
+        {/* New Folder Modal */}
+        {showNewFolderModal && (
+          <div className="modal-overlay">
+            <div className="modal">
+              <div className="modal-header">
+                <h3>Create New Folder</h3>
+                <button onClick={() => setShowNewFolderModal(false)}>✕</button>
+              </div>
 
-                <div className="modal-content">
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="Folder name"
-                    className="folder-name-input"
-                  />
+              <div className="modal-content">
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="Folder name"
+                  className="folder-name-input"
+                />
 
-                  <div className="folder-customization">
-                    <div>
-                      <label>Color:</label>
-                      <div className="color-picker">
-                        {noteColors.map((color) => (
-                          <button
-                            key={color}
-                            onClick={() => setNewFolderColor(color)}
-                            className={`color-option ${
-                              newFolderColor === color ? "selected" : ""
-                            }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
-                      </div>
+                <div className="folder-customization">
+                  <div>
+                    <label>Color:</label>
+                    <div className="color-picker">
+                      {noteColors.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setNewFolderColor(color)}
+                          className={`color-option ${
+                            newFolderColor === color ? "selected" : ""
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
                     </div>
+                  </div>
 
-                    <div>
-                      <label>Icon:</label>
-                      <div className="icon-picker">
-                        {folderIcons.map((icon) => (
-                          <button
-                            key={icon}
-                            onClick={() => setNewFolderIcon(icon)}
-                            className={`icon-option ${
-                              newFolderIcon === icon ? "selected" : ""
-                            }`}
-                          >
-                            {icon}
-                          </button>
-                        ))}
-                      </div>
+                  <div>
+                    <label>Icon:</label>
+                    <div className="icon-picker">
+                      {folderIcons.map((icon) => (
+                        <button
+                          key={icon}
+                          onClick={() => setNewFolderIcon(icon)}
+                          className={`icon-option ${
+                            newFolderIcon === icon ? "selected" : ""
+                          }`}
+                        >
+                          {icon}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
+              </div>
 
-                <div className="modal-actions">
-                  <button
-                    onClick={() => setShowNewFolderModal(false)}
-                    className="cancel-btn"
-                  >
-                    Cancel
-                  </button>
-                  <button onClick={handleCreateFolder} className="create-btn">
-                    Create Folder
-                  </button>
-                </div>
+              <div className="modal-actions">
+                <button
+                  onClick={() => setShowNewFolderModal(false)}
+                  className="cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button onClick={handleCreateFolder} className="create-btn">
+                  Create Folder
+                </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Error Display */}
-          {error && (
-            <motion.div
-              className="error-notification"
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 50 }}
-            >
-              <span className="error-icon">⚠️</span>
-              {error}
-              <button onClick={() => setError(null)} className="error-close">
-                ✕
-              </button>
-            </motion.div>
-          )}
-        </motion.div>
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            className="error-notification"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+          >
+            <span className="error-icon">⚠️</span>
+            {error}
+            <button onClick={() => setError(null)} className="error-close">
+              ✕
+            </button>
+          </motion.div>
+        )}
       </motion.div>
     </AnimatePresence>
   );

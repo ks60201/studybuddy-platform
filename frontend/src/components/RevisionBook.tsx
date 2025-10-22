@@ -1,74 +1,42 @@
-import React, { useState, useEffect, useRef, Fragment } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import {
   Book,
   Clock,
   GraduationCap,
   Search,
-  Filter,
-  Grid,
-  List,
   Sparkles,
   Star,
   BookOpen,
   Brain,
   Target,
-  Zap,
-  Eye,
   Bookmark,
   Share2,
   Download,
-  Play,
-  Pause,
-  Volume2,
   Lightbulb,
-  TrendingUp,
-  Award,
-  Calendar,
-  Users,
-  BarChart3,
-  Sparkle,
   ChevronLeft,
   ChevronRight,
   X,
   Maximize2,
   Minimize2,
   RotateCcw,
-  BookmarkPlus,
-  Star as StarIcon,
-  Heart,
   MessageCircle,
-  Share,
-  Copy,
-  ExternalLink,
-  Download as DownloadIcon,
-  Printer,
-  BookOpen as BookOpenIcon,
-  Headphones,
-  Mic,
-  Video,
-  Camera,
-  FileText,
-  Image,
-  Video as VideoIcon,
-  Music,
-  File,
-  Folder,
-  Tag,
-  Hash,
-  AtSign,
-  Hash as HashIcon,
-  Calendar as CalendarIcon,
-  Clock as ClockIcon,
-  MapPin,
-  Globe,
-  Wifi,
-  Battery,
-  Signal,
-  Wifi as WifiIcon,
-  Battery as BatteryIcon,
-  Signal as SignalIcon,
   Highlighter,
   Send,
+  Library,
+  Archive,
+  Crown,
+  Gem,
+  Flame,
+  Rocket,
+  Layers3,
+  BookMarked,
+  Zap as ZapIcon,
+  Sliders,
+  Loader2,
+  Trash2,
+  List as ListIcon,
+  Layout,
 } from "lucide-react";
 import "./RevisionBook.css";
 
@@ -133,20 +101,17 @@ const RevisionBook: React.FC = () => {
   const [pageTurnDirection, setPageTurnDirection] = useState<
     "left" | "right" | null
   >(null);
-  const [selectedLecture, setSelectedLecture] = useState<string | null>(null);
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [readingMode, setReadingMode] = useState<"normal" | "focus" | "night">(
     "normal"
   );
   const [fontSize, setFontSize] = useState(16);
-  const [lineHeight, setLineHeight] = useState(1.6);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [lectureStats, setLectureStats] = useState<Map<string, LectureStats>>(
     new Map()
   );
-  const [activeFilters, setActiveFilters] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<
     "date" | "title" | "subject" | "progress"
   >("date");
@@ -320,14 +285,13 @@ const RevisionBook: React.FC = () => {
     setCurrentPage(0);
     setPageTurnDirection(null);
     setIsBookOpen(true);
-    setSelectedLecture(lecture.id);
   };
 
   const closeBook = () => {
     setIsBookOpen(false);
     setCurrentPage(0);
     setPageTurnDirection(null);
-    setSelectedLecture(null);
+    setCurrentLecture(null);
   };
 
   const nextPage = () => {
@@ -725,7 +689,7 @@ const RevisionBook: React.FC = () => {
           </div>
           <div
             className="content-text"
-            style={{ fontSize: `${fontSize}px`, lineHeight: lineHeight }}
+            style={{ fontSize: `${fontSize}px`, lineHeight: 1.6 }}
           >
             {section.text}
           </div>
@@ -807,7 +771,7 @@ const RevisionBook: React.FC = () => {
           </div>
           <div className="diagram-container">
             <div className="diagram-header">
-              <Image size={20} />
+              <BookOpen size={20} />
               <span>Visual Aid</span>
             </div>
             <div className="diagram-content">
@@ -1086,22 +1050,69 @@ const RevisionBook: React.FC = () => {
 
   return (
     <div className="library-container" ref={containerRef}>
-      <div className="library-header">
+      <motion.div
+        className="library-header"
+        initial={{ opacity: 0, y: -50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+      >
         <div className="library-title">
-          <div className="title-icon">
-            <Book size={32} />
-            <Sparkles size={20} className="sparkle-1" />
-            <Star size={16} className="sparkle-2" />
-          </div>
-          <h1>My Learning Library</h1>
-          <div className="library-stats">
-            <span>{savedLectures.length} Lectures</span>
-            <span>{Array.from(bookmarks).length} Bookmarked</span>
-          </div>
+          <motion.div
+            className="title-icon"
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Library size={40} />
+            <motion.div
+              className="sparkle-1"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+            >
+              <Crown size={24} />
+            </motion.div>
+            <motion.div
+              className="sparkle-2"
+              animate={{ rotate: -360 }}
+              transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+            >
+              <Gem size={20} />
+            </motion.div>
+          </motion.div>
+          <motion.h1
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+          >
+            My Learning Library
+          </motion.h1>
+          <motion.div
+            className="library-stats"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+          >
+            <motion.span whileHover={{ scale: 1.05 }} className="stat-item">
+              <Archive size={16} />
+              {savedLectures.length} Lectures
+            </motion.span>
+            <motion.span whileHover={{ scale: 1.05 }} className="stat-item">
+              <BookMarked size={16} />
+              {Array.from(bookmarks).length} Bookmarked
+            </motion.span>
+          </motion.div>
         </div>
-        <div className="library-controls">
+        <motion.div
+          className="library-controls"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7, duration: 0.6 }}
+        >
           <div className="search-filter">
-            <div className="search-box">
+            <motion.div
+              className="search-box"
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.2 }}
+            >
               <Search size={20} />
               <input
                 ref={searchRef}
@@ -1110,13 +1121,15 @@ const RevisionBook: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <button
+              <motion.button
                 className="advanced-search-btn"
                 onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
               >
-                <Filter size={16} />
-              </button>
-            </div>
+                <Sliders size={16} />
+              </motion.button>
+            </motion.div>
             <select
               value={filterSubject}
               onChange={(e) => setFilterSubject(e.target.value)}
@@ -1146,45 +1159,60 @@ const RevisionBook: React.FC = () => {
               {sortOrder === "asc" ? "↑" : "↓"}
             </button>
           </div>
-          <div className="view-toggle">
-            <button
+          <motion.div
+            className="view-toggle"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.9, duration: 0.4 }}
+          >
+            <motion.button
               onClick={() => setViewMode("grid")}
               className={viewMode === "grid" ? "active" : ""}
               title="Grid View"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <Grid size={20} />
-            </button>
-            <button
+              <Layout size={20} />
+            </motion.button>
+            <motion.button
               onClick={() => setViewMode("list")}
               className={viewMode === "list" ? "active" : ""}
               title="List View"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <List size={20} />
-            </button>
-            <button
+              <ListIcon size={20} />
+            </motion.button>
+            <motion.button
               onClick={() => setViewMode("masonry")}
               className={viewMode === "masonry" ? "active" : ""}
               title="Masonry View"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <BookOpen size={20} />
-            </button>
-            <button
+              <Layers3 size={20} />
+            </motion.button>
+            <motion.button
               onClick={() => setViewMode("carousel")}
               className={viewMode === "carousel" ? "active" : ""}
               title="Carousel View"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
             >
-              <BarChart3 size={20} />
-            </button>
-          </div>
-          <button
+              <Rocket size={20} />
+            </motion.button>
+          </motion.div>
+          <motion.button
             onClick={() => setShowBookmarks(!showBookmarks)}
             className={`bookmark-toggle ${showBookmarks ? "active" : ""}`}
             title="Show Bookmarks"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
           >
-            <Bookmark size={20} />
-          </button>
-        </div>
-      </div>
+            <BookMarked size={20} />
+          </motion.button>
+        </motion.div>
+      </motion.div>
 
       {deleteError && (
         <div className="error-message">
@@ -1297,13 +1325,13 @@ const RevisionBook: React.FC = () => {
           </div>
         ) : (
           <div className={`lectures-grid ${viewMode}`}>
-            {filteredAndSortedLectures.map((lecture) => {
+            {filteredAndSortedLectures.map((lecture, index) => {
               const stats = lectureStats.get(lecture.id);
               const isBookmarked = bookmarks.has(lecture.id);
               const isHovered = hoveredCard === lecture.id;
 
               return (
-                <div
+                <motion.div
                   key={lecture.id}
                   className={`lecture-card ${isHovered ? "hovered" : ""} ${
                     isBookmarked ? "bookmarked" : ""
@@ -1311,49 +1339,118 @@ const RevisionBook: React.FC = () => {
                   onClick={() => openBook(lecture)}
                   onMouseEnter={() => setHoveredCard(lecture.id)}
                   onMouseLeave={() => setHoveredCard(null)}
+                  initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    duration: 0.6,
+                    ease: "easeOut",
+                    delay: index * 0.1,
+                  }}
+                  whileHover={{
+                    scale: 1.05,
+                    y: -10,
+                    transition: { duration: 0.3 },
+                  }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <div className="card-spine"></div>
-                  <div className="card-content">
+                  <motion.div
+                    className="card-content"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                  >
                     <div className="card-header">
-                      <h3>{lecture.title}</h3>
+                      <motion.h3
+                        whileHover={{ scale: 1.02 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {lecture.title}
+                      </motion.h3>
                       <div className="card-badges">
-                        <span className="subject-badge">{lecture.subject}</span>
+                        <motion.span
+                          className="subject-badge"
+                          whileHover={{ scale: 1.05 }}
+                        >
+                          <Crown size={14} />
+                          {lecture.subject}
+                        </motion.span>
                         {isBookmarked && (
-                          <Bookmark size={16} className="bookmark-icon" />
+                          <motion.div
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{ delay: 0.3 }}
+                          >
+                            <BookMarked size={16} className="bookmark-icon" />
+                          </motion.div>
                         )}
                       </div>
                     </div>
                     <div className="card-details">
-                      <p>
+                      <motion.p
+                        whileHover={{ x: 5 }}
+                        transition={{ duration: 0.2 }}
+                      >
                         <GraduationCap size={16} /> {lecture.class_level}
-                      </p>
-                      <p>
+                      </motion.p>
+                      <motion.p
+                        whileHover={{ x: 5 }}
+                        transition={{ duration: 0.2 }}
+                      >
                         <Clock size={16} /> {formatDate(lecture.saved_at)}
-                      </p>
-                      <p className="topic">{lecture.topic}</p>
+                      </motion.p>
+                      <motion.p
+                        className="topic"
+                        whileHover={{ x: 5 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        <Target size={16} /> {lecture.topic}
+                      </motion.p>
                     </div>
                     {stats && (
-                      <div className="card-stats">
-                        <div className="stat-item">
-                          <Target size={14} />
+                      <motion.div
+                        className="card-stats"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                      >
+                        <motion.div
+                          className="stat-item"
+                          whileHover={{ scale: 1.05 }}
+                        >
+                          <ZapIcon size={14} />
                           <span>{stats.comprehensionScore}% Mastery</span>
-                        </div>
-                        <div className="stat-item">
-                          <Brain size={14} />
+                        </motion.div>
+                        <motion.div
+                          className="stat-item"
+                          whileHover={{ scale: 1.05 }}
+                        >
+                          <Layers3 size={14} />
                           <span>{stats.sectionsCompleted} Sections</span>
-                        </div>
-                        <div className="stat-item">
+                        </motion.div>
+                        <motion.div
+                          className="stat-item"
+                          whileHover={{ scale: 1.05 }}
+                        >
                           <MessageCircle size={14} />
                           <span>{stats.questionsAsked} Q&As</span>
-                        </div>
-                        <div className="stat-item">
-                          <TrendingUp size={14} />
+                        </motion.div>
+                        <motion.div
+                          className="stat-item"
+                          whileHover={{ scale: 1.05 }}
+                        >
+                          <Flame size={14} />
                           <span>{stats.studyStreak} Day Streak</span>
-                        </div>
-                      </div>
+                        </motion.div>
+                      </motion.div>
                     )}
-                    <div className="card-actions">
-                      <button
+                    <motion.div
+                      className="card-actions"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      <motion.button
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleBookmark(lecture.id);
@@ -1362,16 +1459,28 @@ const RevisionBook: React.FC = () => {
                         title={
                           isBookmarked ? "Remove Bookmark" : "Add Bookmark"
                         }
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
                       >
-                        <Bookmark size={16} />
-                      </button>
-                      <button className="action-btn" title="Share">
+                        <BookMarked size={16} />
+                      </motion.button>
+                      <motion.button
+                        className="action-btn"
+                        title="Share"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
                         <Share2 size={16} />
-                      </button>
-                      <button className="action-btn" title="Download">
+                      </motion.button>
+                      <motion.button
+                        className="action-btn"
+                        title="Download"
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
                         <Download size={16} />
-                      </button>
-                      <button
+                      </motion.button>
+                      <motion.button
                         onClick={(e) => {
                           e.stopPropagation();
                           deleteLecture(lecture.id);
@@ -1379,14 +1488,16 @@ const RevisionBook: React.FC = () => {
                         className="action-btn delete-btn"
                         title="Delete Lecture"
                         disabled={isDeletingLecture}
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
                       >
                         {isDeletingLecture ? (
-                          <div className="loading-spinner-small"></div>
+                          <Loader2 size={16} className="animate-spin" />
                         ) : (
-                          <X size={16} />
+                          <Trash2 size={16} />
                         )}
-                      </button>
-                    </div>
+                      </motion.button>
+                    </motion.div>
                     <div className="card-progress">
                       <div className="progress-bar">
                         <div
@@ -1400,9 +1511,9 @@ const RevisionBook: React.FC = () => {
                         {stats?.comprehensionScore || 0}% Complete
                       </span>
                     </div>
-                  </div>
+                  </motion.div>
                   <div className="card-glow"></div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

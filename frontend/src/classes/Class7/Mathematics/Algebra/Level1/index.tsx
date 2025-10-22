@@ -100,12 +100,12 @@ const AlgebraLevel1: React.FC = () => {
   // NEW: Teacher Profile for Mathematics Algebra
   const teacherProfile: TeacherProfile = {
     name: "Professor Algebra",
-    avatar: "📐",
+    avatar: "🤖",
     colorScheme: {
-      primary: "from-green-600 to-emerald-500",
+      primary: "from-blue-600 to-purple-500",
       secondary: "from-purple-600 to-pink-500",
-      accent: "from-yellow-400 to-orange-500",
-      background: "from-slate-900 via-green-900 to-slate-900",
+      accent: "from-amber-400 to-orange-500",
+      background: "from-slate-900 via-blue-900 to-slate-900",
     },
     subject: "Mathematics - Algebra",
   };
@@ -122,37 +122,37 @@ const AlgebraLevel1: React.FC = () => {
       keyword: "constants",
       icon: "🔢",
       animation: "pulse",
-      color: "text-yellow-400",
+      color: "text-blue-400",
     },
     {
       keyword: "equations",
       icon: "⚖️",
       animation: "ping",
-      color: "text-green-400",
+      color: "text-purple-400",
     },
     {
       keyword: "fraction bar",
       icon: "➗",
       animation: "spin",
-      color: "text-purple-400",
+      color: "text-pink-400",
     },
     {
       keyword: "algebra",
-      icon: "📐",
+      icon: "🤖",
       animation: "bounce",
-      color: "text-red-400",
+      color: "text-cyan-400",
     },
     {
       keyword: "division",
       icon: "➗",
       animation: "pulse",
-      color: "text-cyan-400",
+      color: "text-orange-400",
     },
     {
       keyword: "multiplication",
       icon: "✖️",
       animation: "bounce",
-      color: "text-blue-400",
+      color: "text-yellow-400",
     },
     {
       keyword: "inverse",
@@ -164,13 +164,13 @@ const AlgebraLevel1: React.FC = () => {
       keyword: "substitution",
       icon: "⚙️",
       animation: "spin",
-      color: "text-gray-400",
+      color: "text-teal-400",
     },
     {
       keyword: "terms",
       icon: "📝",
       animation: "ping",
-      color: "text-yellow-400",
+      color: "text-rose-400",
     },
   ];
 
@@ -200,7 +200,7 @@ const AlgebraLevel1: React.FC = () => {
         detectedKeywords.push({ keyword, icon, animation, color });
         highlightedText = highlightedText.replace(
           regex,
-          `<span class="font-bold text-yellow-400 bg-yellow-900/20 px-1 rounded">${keyword}</span>`
+          `<span class="font-bold text-blue-300 bg-blue-500/20 px-2 py-1 rounded-lg border border-blue-400/30">${keyword}</span>`
         );
       }
     });
@@ -226,7 +226,6 @@ const AlgebraLevel1: React.FC = () => {
     }
   }, [showQaModal]);
   const [transcript, setTranscript] = useState<TranscriptItem[]>([]);
-  const [currentTopic, setCurrentTopic] = useState<string>("");
   const [currentLectureTopic, setCurrentLectureTopic] = useState<string>(
     "Waiting for lecture to begin..."
   );
@@ -254,7 +253,7 @@ const AlgebraLevel1: React.FC = () => {
   // NEW: Flashcard and revision states
   const [isLectureComplete, setIsLectureComplete] = useState(false);
   const [showRevisionSection, setShowRevisionSection] = useState(false);
-  const [flashcards, setFlashcards] = useState<FlashcardSet | null>(null);
+  const [flashcards] = useState<FlashcardSet | null>(null);
   const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   const [isGeneratingFlashcards, setIsGeneratingFlashcards] = useState(false);
@@ -263,7 +262,6 @@ const AlgebraLevel1: React.FC = () => {
   const [quizError, setQuizError] = useState<string | null>(null);
   const [isSavingLecture, setIsSavingLecture] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedLectureId, setSavedLectureId] = useState<string | null>(null);
 
   // NEW: Diagram overlay states
   const [showDiagramOverlay, setShowDiagramOverlay] = useState(false);
@@ -562,7 +560,7 @@ const AlgebraLevel1: React.FC = () => {
         }
       );
 
-      const data = await response.json();
+      await response.json();
 
       setLectureStatus({
         is_running: false,
@@ -771,12 +769,9 @@ const AlgebraLevel1: React.FC = () => {
   };
 
   const flipFlashcard = () => {
+    console.log("Before flip - isFlashcardFlipped:", isFlashcardFlipped);
     setIsFlashcardFlipped(!isFlashcardFlipped);
-  };
-
-  const resetFlashcards = () => {
-    setCurrentFlashcardIndex(0);
-    setIsFlashcardFlipped(false);
+    console.log("After flip - new value:", !isFlashcardFlipped);
   };
 
   // Update transcript fetching
@@ -1144,13 +1139,14 @@ const AlgebraLevel1: React.FC = () => {
           </div>
 
           <h1 className="start-title">
-            🎓 Algebra Level 1: The Language of Division
+            🤖 Algebra Level 1: Mastering the Language of Mathematics
           </h1>
-          <h2 className="start-subtitle">📐 Mathematics - Algebra Level 1</h2>
+          <h2 className="start-subtitle">🎯 Mathematics - Algebra Level 1</h2>
           <p className="start-description">
-            Get ready for an interactive algebra lecture with AI-powered
-            explanations, revolutionary Math Wall TTS processing, and immersive
-            learning experience.
+            Welcome to your personalized algebra learning experience! Our AI
+            teacher will guide you through fundamental concepts, interactive
+            examples, and practical applications. Get ready to master algebra
+            with intelligent explanations and adaptive learning.
           </p>
 
           <button
@@ -1158,7 +1154,7 @@ const AlgebraLevel1: React.FC = () => {
               startLecture();
             }}
             disabled={isLoading}
-            className="start-lecture-btn"
+            className="btn-primary start-lecture-btn"
           >
             {isLoading ? (
               <>
@@ -1179,16 +1175,24 @@ const AlgebraLevel1: React.FC = () => {
               <span>AI Voice Narration</span>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">❓</span>
-              <span>Interactive Q&A</span>
+              <span className="feature-icon">🧠</span>
+              <span>Smart Problem Solving</span>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">📝</span>
-              <span>Live Transcript</span>
+              <span className="feature-icon">📊</span>
+              <span>Progress Tracking</span>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">🎯</span>
+              <span>Personalized Learning</span>
             </div>
             <div className="feature-item">
               <span className="feature-icon">🎙️</span>
               <span>Voice Recognition</span>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">📱</span>
+              <span>Interactive Diagrams</span>
             </div>
           </div>
         </div>
@@ -1203,29 +1207,18 @@ const AlgebraLevel1: React.FC = () => {
     >
       {/* Left Side - AI Robot and Controls */}
       <div className="ai-panel">
-        {/* NEW: Teacher Profile Header */}
-        <motion.div
-          className="teacher-profile-header mb-6 p-4 rounded-xl bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-        >
-          <div className="flex items-center gap-4">
-            <motion.div
-              className="teacher-avatar text-4xl"
-              animate={{ rotate: [0, 10, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            >
-              {teacherProfile.avatar}
-            </motion.div>
-            <div className="teacher-info">
-              <h2 className="text-xl font-bold text-white mb-1">
-                {teacherProfile.name}
-              </h2>
-              <p className="text-cyan-300 text-sm">{teacherProfile.subject}</p>
+        {/* Teacher Profile Header */}
+        <div className="teacher-profile-header">
+          <div className="teacher-avatar">{teacherProfile.avatar}</div>
+          <div className="teacher-info">
+            <h2>{teacherProfile.name}</h2>
+            <p>{teacherProfile.subject}</p>
+            <div className="status-indicator">
+              <div className="status-dot active"></div>
+              <span>Online & Ready</span>
             </div>
           </div>
-        </motion.div>
+        </div>
 
         <div className="ai-robot">
           <div className="robot-head">
@@ -1245,7 +1238,7 @@ const AlgebraLevel1: React.FC = () => {
 
         <div className="sound-waves">
           <div className="wave-container">
-            {Array.from({ length: 20 }, (_, i) => (
+            {Array.from({ length: 5 }, (_, i) => (
               <div
                 key={i}
                 className="wave-bar"
@@ -1256,7 +1249,7 @@ const AlgebraLevel1: React.FC = () => {
         </div>
 
         <div className="current-topic">
-          <h3 className="text-white font-semibold mb-2">🎯 Current Topic</h3>
+          <h3>🎯 Current Learning Focus</h3>
           <AnimatePresence mode="wait">
             <motion.p
               key={topicTransitionKey}
@@ -1264,7 +1257,6 @@ const AlgebraLevel1: React.FC = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -20, scale: 0.9 }}
               transition={{ duration: 0.5, ease: "easeOut" }}
-              className="text-lg font-medium text-cyan-300 bg-gradient-to-r from-cyan-400/20 to-blue-400/20 px-4 py-2 rounded-lg backdrop-blur-sm"
             >
               {currentLectureTopic}
             </motion.p>
@@ -1310,7 +1302,7 @@ const AlgebraLevel1: React.FC = () => {
               <button
                 onClick={saveLecture}
                 disabled={isSavingLecture}
-                className="revision-btn primary"
+                className="btn-primary revision-btn"
               >
                 {isSavingLecture ? (
                   <>
@@ -1330,7 +1322,7 @@ const AlgebraLevel1: React.FC = () => {
                   generateFlashcards(10);
                 }}
                 disabled={isGeneratingFlashcards}
-                className="revision-btn primary"
+                className="btn-primary revision-btn"
               >
                 {isGeneratingFlashcards ? (
                   <>
@@ -1348,7 +1340,7 @@ const AlgebraLevel1: React.FC = () => {
               <button
                 onClick={() => generateQuiz(10)}
                 disabled={isGeneratingQuiz}
-                className="revision-btn primary"
+                className="btn-primary revision-btn"
               >
                 {isGeneratingQuiz ? (
                   <>
@@ -1365,7 +1357,7 @@ const AlgebraLevel1: React.FC = () => {
 
               <button
                 onClick={activateInteractiveDiagram}
-                className="revision-btn primary"
+                className="btn-secondary revision-btn"
               >
                 <span className="btn-icon">📐</span>
                 Interactive Algebra Diagram
@@ -1416,7 +1408,7 @@ const AlgebraLevel1: React.FC = () => {
               return detailedLectureStatus.lecture_paused ? (
                 <motion.button
                   onClick={resumeLecture}
-                  className="control-btn resume-btn bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  className="btn-success control-btn resume-btn"
                   whileHover={{
                     scale: 1.05,
                     boxShadow: "0 20px 40px rgba(34, 197, 94, 0.3)",
@@ -1431,7 +1423,7 @@ const AlgebraLevel1: React.FC = () => {
               ) : (
                 <motion.button
                   onClick={pauseLecture}
-                  className="control-btn pause-btn bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+                  className="btn-warning control-btn pause-btn"
                   whileHover={{
                     scale: 1.05,
                     boxShadow: "0 20px 40px rgba(245, 158, 11, 0.3)",
@@ -1449,7 +1441,7 @@ const AlgebraLevel1: React.FC = () => {
             {/* NEW: Notes Button */}
             <motion.button
               onClick={() => setShowNotesPopup(true)}
-              className="control-btn notes-btn bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              className="btn-secondary control-btn notes-btn"
               whileHover={{
                 scale: 1.05,
                 boxShadow: "0 20px 40px rgba(147, 51, 234, 0.3)",
@@ -1465,7 +1457,7 @@ const AlgebraLevel1: React.FC = () => {
 
             <motion.button
               onClick={stopLecture}
-              className="control-btn stop-btn bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-400 hover:to-pink-500 text-white font-semibold px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+              className="btn-danger control-btn stop-btn"
               whileHover={{
                 scale: 1.05,
                 boxShadow: "0 20px 40px rgba(239, 68, 68, 0.3)",
@@ -1486,28 +1478,17 @@ const AlgebraLevel1: React.FC = () => {
         {!showRevisionSection ? (
           <>
             <motion.div
-              className="transcript-header bg-gradient-to-r from-white/10 to-white/5 backdrop-blur-md rounded-xl p-4 mb-4"
+              className="transcript-header"
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, ease: "easeOut" }}
             >
               <div className="flex items-center gap-3">
-                <motion.div
-                  className="text-2xl"
-                  animate={{ rotate: [0, 5, -5, 0] }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                >
-                  📝
-                </motion.div>
-                <h2 className="text-xl font-bold text-white">
-                  Live Lecture Transcript
-                </h2>
+                <div className="text-3xl">📝</div>
+                <h2>Live Learning Transcript</h2>
                 <div className="ml-auto flex items-center gap-2">
-                  <span className="text-xs text-cyan-300">
+                  <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs text-blue-200 font-medium">
                     {teacherProfile.name}
                   </span>
                 </div>
@@ -1528,9 +1509,9 @@ const AlgebraLevel1: React.FC = () => {
                       className={`transcript-item ${
                         entry.section_index ===
                         detailedLectureStatus.current_section_index
-                          ? "active bg-gradient-to-r from-cyan-500/10 to-blue-500/10 shadow-lg shadow-cyan-500/20"
-                          : "bg-gradient-to-r from-white/5 to-white/10"
-                      } bg-gradient-to-r from-white/5 to-white/10 rounded-xl p-4 backdrop-blur-sm transition-all duration-300`}
+                          ? "active"
+                          : ""
+                      }`}
                       data-type={isQA ? "qa" : "lecture"}
                       initial={{ opacity: 0, y: 20, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1544,24 +1525,14 @@ const AlgebraLevel1: React.FC = () => {
                         transition: { duration: 0.2 },
                       }}
                     >
-                      <div className="transcript-header-item bg-gradient-to-r from-white/5 to-white/10 rounded-lg p-3 mb-2">
+                      <div className="transcript-header-item">
                         <div className="flex items-center justify-between">
-                          <motion.span
-                            className="transcript-topic font-semibold text-cyan-300"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3 }}
-                          >
+                          <span className="transcript-topic">
                             {entry.section}
-                          </motion.span>
-                          <motion.span
-                            className="transcript-time text-xs text-gray-400"
-                            initial={{ opacity: 0, x: 10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: 0.1 }}
-                          >
+                          </span>
+                          <span className="transcript-time">
                             {new Date(entry.timestamp).toLocaleTimeString()}
-                          </motion.span>
+                          </span>
                         </div>
                       </div>
                       <div className="transcript-text">
@@ -1619,14 +1590,14 @@ const AlgebraLevel1: React.FC = () => {
                 })
               ) : (
                 <motion.div
-                  className="transcript-item bg-gradient-to-r from-white/5 to-white/10 rounded-xl p-6 backdrop-blur-sm"
+                  className="transcript-item"
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.6, ease: "easeOut" }}
                 >
                   <div className="text-center">
                     <motion.div
-                      className="text-4xl mb-4"
+                      className="text-6xl mb-6"
                       animate={{
                         rotate: [0, 10, -10, 0],
                         scale: [1, 1.1, 1],
@@ -1637,27 +1608,28 @@ const AlgebraLevel1: React.FC = () => {
                         ease: "easeInOut",
                       }}
                     >
-                      🎓
+                      🤖
                     </motion.div>
-                    <h3 className="text-xl font-semibold text-white mb-2">
-                      No Transcript Yet
+                    <h3 className="text-2xl font-bold text-white mb-3">
+                      Ready to Begin Learning
                     </h3>
-                    <p className="text-gray-300">
-                      Waiting for {teacherProfile.name} to begin the lecture...
+                    <p className="text-blue-200 text-lg">
+                      {teacherProfile.name} is preparing your personalized
+                      algebra journey...
                     </p>
-                    <div className="mt-4 flex justify-center">
+                    <div className="mt-6 flex justify-center">
                       <motion.div
-                        className="flex gap-1"
+                        className="flex gap-2"
                         animate={{ opacity: [0.5, 1, 0.5] }}
                         transition={{ duration: 1.5, repeat: Infinity }}
                       >
-                        <div className="w-2 h-2 bg-cyan-400 rounded-full"></div>
+                        <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
                         <div
-                          className="w-2 h-2 bg-cyan-400 rounded-full"
+                          className="w-3 h-3 bg-blue-400 rounded-full"
                           style={{ animationDelay: "0.2s" }}
                         ></div>
                         <div
-                          className="w-2 h-2 bg-cyan-400 rounded-full"
+                          className="w-3 h-3 bg-blue-400 rounded-full"
                           style={{ animationDelay: "0.4s" }}
                         ></div>
                       </motion.div>
@@ -1691,6 +1663,19 @@ const AlgebraLevel1: React.FC = () => {
                       {currentFlashcardIndex + 1} of{" "}
                       {flashcards.flashcards.length}
                     </div>
+                    <div
+                      className="debug-info"
+                      style={{
+                        fontSize: "12px",
+                        color: "#666",
+                        marginTop: "5px",
+                      }}
+                    >
+                      State:{" "}
+                      {isFlashcardFlipped
+                        ? "SHOWING ANSWER"
+                        : "SHOWING QUESTION"}
+                    </div>
                   </div>
 
                   <div className="flashcard-container">
@@ -1713,6 +1698,15 @@ const AlgebraLevel1: React.FC = () => {
                           <div className="flip-instruction">
                             👆 Click to reveal answer
                           </div>
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#999",
+                              marginTop: "10px",
+                            }}
+                          >
+                            DEBUG: This is the QUESTION side
+                          </div>
                         </div>
                       </div>
 
@@ -1732,6 +1726,15 @@ const AlgebraLevel1: React.FC = () => {
                               flashcards.flashcards[currentFlashcardIndex]
                                 ?.topic
                             }
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "10px",
+                              color: "#999",
+                              marginTop: "10px",
+                            }}
+                          >
+                            DEBUG: This is the ANSWER side
                           </div>
                         </div>
                       </div>
@@ -1841,7 +1844,7 @@ const AlgebraLevel1: React.FC = () => {
                     src={diagramImageUrl}
                     alt="Wave Diagram"
                     className="diagram-image"
-                    onError={(e) => {
+                    onError={() => {
                       console.error("Error loading diagram image");
                       closeDiagramManually();
                     }}
@@ -2009,7 +2012,10 @@ const AlgebraLevel1: React.FC = () => {
                     </button>
                   )}
                 </div>
-                <button onClick={submitQAResponse} className="qa-submit-btn">
+                <button
+                  onClick={submitQAResponse}
+                  className="btn-primary qa-submit-btn"
+                >
                   Send
                 </button>
               </div>

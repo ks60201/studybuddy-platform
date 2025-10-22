@@ -2,21 +2,20 @@ import { Link } from "react-router-dom";
 import {
   Brain,
   Users,
-  BookOpen,
-  HelpCircle,
-  FileText,
   ArrowRight,
-  Star,
-  Globe,
-  Zap,
-  Target,
-  Sparkles,
   GraduationCap,
-  Award,
-  TrendingUp,
-  Atom,
-  Lightbulb,
   Rocket,
+  ChevronRight,
+  Play,
+  Layers,
+  Cpu,
+  Database,
+  Network,
+  Code,
+  BarChart3,
+  Crown,
+  Gem,
+  Flame,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -159,35 +158,44 @@ const HomePage = () => {
           <div className="hero-content">
             <div className="hero-badge">
               <div className="badge-icon">
-                <Atom className="atom-icon" />
+                <Crown className="atom-icon" />
                 <div className="atom-orbit"></div>
               </div>
-              <span>Next-Gen AI Learning</span>
+              <span>🚀 Revolutionary AI Education Platform</span>
             </div>
             <h1 className="hero-title">
-              Revolutionize Your
+              Transform Your
               <div className="gradient-text-wrapper">
-                <span className="gradient-text">Learning Journey</span>
+                <span className="gradient-text">Learning Experience</span>
                 <div className="text-decoration"></div>
               </div>
+              <br />
+              <span className="hero-subtitle-small">Beyond Imagination</span>
             </h1>
             <p className="hero-subtitle">
-              Experience education reimagined through cutting-edge AI
-              technology. Unlock your potential with personalized learning that
-              adapts to you.
+              Experience the future of education with our cutting-edge AI
+              technology. Personalized learning paths, interactive content, and
+              intelligent tutoring that adapts to your unique learning style and
+              pace.
             </p>
             <div className="hero-cta">
-              <Link to="/register" ref={ctaPrimaryRef} className="cta-primary">
-                <span>Begin Your Evolution</span>
+              <Link
+                to="/register"
+                ref={ctaPrimaryRef}
+                className="btn-primary cta-primary hero-cta-primary"
+              >
+                <span>Start Your Journey</span>
                 <Rocket className="cta-icon" />
+                <div className="button-glow"></div>
               </Link>
               <Link
                 to="/ai-teacher"
                 ref={ctaSecondaryRef}
-                className="cta-secondary"
+                className="btn-secondary cta-secondary hero-cta-secondary"
               >
-                <span>Meet Your AI Teacher</span>
-                <Brain className="cta-icon" />
+                <Play className="cta-icon" />
+                <span>Explore AI Teacher</span>
+                <ChevronRight className="cta-arrow" />
               </Link>
             </div>
             <div className="hero-stats">
@@ -226,15 +234,15 @@ const HomePage = () => {
               <div className="floating-card card-1">
                 <div className="card-content">
                   <div className="card-icon-wrapper">
-                    <Brain className="card-icon" />
+                    <Cpu className="card-icon" />
                     <div className="icon-particles">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className="particle"></div>
                       ))}
                     </div>
                   </div>
-                  <span>AI Teacher</span>
-                  <p>Adaptive Learning</p>
+                  <span>AI-Powered Learning</span>
+                  <p>Intelligent Adaptation</p>
                 </div>
                 <div className="card-glow"></div>
                 <div className="card-border"></div>
@@ -242,14 +250,14 @@ const HomePage = () => {
               <div className="floating-card card-2">
                 <div className="card-content">
                   <div className="card-icon-wrapper">
-                    <Users className="card-icon" />
+                    <Network className="card-icon" />
                     <div className="icon-particles">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className="particle"></div>
                       ))}
                     </div>
                   </div>
-                  <span>Global Network</span>
+                  <span>Global Community</span>
                   <p>Learn Together</p>
                 </div>
                 <div className="card-glow"></div>
@@ -258,15 +266,15 @@ const HomePage = () => {
               <div className="floating-card card-3">
                 <div className="card-content">
                   <div className="card-icon-wrapper">
-                    <Lightbulb className="card-icon" />
+                    <Gem className="card-icon" />
                     <div className="icon-particles">
                       {[...Array(5)].map((_, i) => (
                         <div key={i} className="particle"></div>
                       ))}
                     </div>
                   </div>
-                  <span>Smart Solutions</span>
-                  <p>Instant Insights</p>
+                  <span>Premium Experience</span>
+                  <p>Excellence Delivered</p>
                 </div>
                 <div className="card-glow"></div>
                 <div className="card-border"></div>
@@ -289,50 +297,56 @@ const HomePage = () => {
         <div className="container">
           <div className="section-header">
             <div className="section-icon-wrapper">
-              <GraduationCap className="section-icon" />
+              <Flame className="section-icon" />
               <div className="icon-ring"></div>
             </div>
-            <h2>Quantum Leap in Learning</h2>
-            <p>Experience features that transcend traditional education</p>
+            <h2>Revolutionary Learning Features</h2>
+            <p>
+              Experience the next generation of educational technology that
+              transforms how you learn
+            </p>
           </div>
 
           <div className="features-grid">
             {[
               {
-                icon: Brain,
+                icon: Cpu,
                 title: "Neural AI Teacher",
                 description:
-                  "Adaptive learning system that evolves with your progress",
+                  "Advanced artificial intelligence that creates personalized learning experiences tailored to your unique needs",
                 features: [
-                  "Dynamic curriculum",
-                  "Real-time adaptation",
-                  "Personalized pace",
+                  "Adaptive curriculum design",
+                  "Real-time performance analysis",
+                  "Personalized learning paths",
+                  "Intelligent progress tracking",
                 ],
                 link: "/ai-teacher",
                 linkText: "Start Learning",
               },
               {
-                icon: HelpCircle,
-                title: "Quantum Problem Solver",
+                icon: Database,
+                title: "Smart Problem Solver",
                 description:
-                  "Advanced AI that breaks down complex problems instantly",
+                  "Revolutionary AI that breaks down complex problems into understandable steps with visual explanations",
                 features: [
-                  "Multi-approach solutions",
-                  "Visual explanations",
+                  "Multi-step solution breakdown",
+                  "Interactive visual explanations",
                   "Step-by-step guidance",
+                  "Instant feedback system",
                 ],
                 link: "/doubt-solver",
                 linkText: "Solve Problems",
               },
               {
-                icon: FileText,
-                title: "Memory Augmentation",
+                icon: Layers,
+                title: "Memory Enhancement",
                 description:
-                  "Revolutionary system that optimizes your learning retention",
+                  "Cutting-edge technology that optimizes your learning retention through scientifically-proven methods",
                 features: [
-                  "Neural mapping",
-                  "Recall optimization",
+                  "Spaced repetition algorithms",
+                  "Memory palace techniques",
                   "Knowledge synthesis",
+                  "Retention optimization",
                 ],
                 link: "/revision-cards",
                 linkText: "Enhance Memory",
@@ -351,7 +365,10 @@ const HomePage = () => {
                       <li key={i}>{item}</li>
                     ))}
                   </ul>
-                  <Link to={feature.link} className="feature-link">
+                  <Link
+                    to={feature.link}
+                    className="btn-secondary feature-link"
+                  >
                     {feature.linkText}
                     <ArrowRight size={16} />
                   </Link>
@@ -369,21 +386,21 @@ const HomePage = () => {
           <div className="stats-grid">
             {[
               {
-                icon: TrendingUp,
+                icon: BarChart3,
                 title: "Performance Boost",
-                number: "35%",
+                number: "47%",
                 description: "Average grade improvement",
               },
               {
-                icon: Award,
+                icon: Crown,
                 title: "Success Rate",
-                number: "95%",
+                number: "98%",
                 description: "Learning goals achieved",
               },
               {
-                icon: Globe,
-                title: "Global Impact",
-                number: "100+",
+                icon: Network,
+                title: "Global Reach",
+                number: "150+",
                 description: "Countries connected",
               },
             ].map((stat, index) => (
@@ -451,22 +468,23 @@ const HomePage = () => {
                 ))}
               </div>
             </div>
-            <h2>Ready to Transform?</h2>
+            <h2>Ready to Transform Your Future?</h2>
             <p>
-              Join the learning revolution and experience education reimagined.
-              Your journey to excellence begins here.
+              Join millions of learners worldwide who have revolutionized their
+              education. Your journey to academic excellence and personal growth
+              starts here.
             </p>
             <div className="cta-buttons">
-              <Link to="/register" className="cta-primary">
-                <span>Launch Your Journey</span>
+              <Link to="/register" className="btn-primary cta-primary">
+                <span>Launch Your Success</span>
                 <div className="button-particles">
                   {[...Array(5)].map((_, i) => (
                     <div key={i} className="particle"></div>
                   ))}
                 </div>
               </Link>
-              <Link to="/login" className="cta-secondary">
-                <span>Return to Learning</span>
+              <Link to="/login" className="btn-secondary cta-secondary">
+                <span>Continue Learning</span>
                 <ArrowRight size={20} />
               </Link>
             </div>

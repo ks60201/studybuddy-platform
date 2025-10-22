@@ -470,7 +470,7 @@ class AlgebraLectureStreamer:
         print("-" * 40)
         
         # Ask if student has questions
-        question_prompt = f"Awesome! Do you have any AMAZING questions about {current_topic}? I'd love to hear what you're curious about! Please type 'yes' or 'no'."
+        question_prompt = f"Awesome. Do you have any AMAZING questions about {current_topic}? I'd love to hear what you're curious about. Please type 'yes' or 'no'."
         print(f"⌨️  {question_prompt}")
         
         # Synthesize the question
@@ -493,7 +493,7 @@ class AlgebraLectureStreamer:
             
             while True:
                 # Ask for the question with unlimited time
-                question_prompt = "What's your AMAZING question? I can't wait to hear what you're curious about!"
+                question_prompt = "What's your AMAZING question? I can't wait to hear what you're curious about."
                 print(f"⌨️  {question_prompt}")
                 
                 # Synthesize the question prompt
@@ -540,7 +540,7 @@ class AlgebraLectureStreamer:
                     time.sleep(2.0)  # Extra buffer to ensure audio is completely done
                     
                     # Ask if they have more questions
-                    more_questions_prompt = "That was such a great question! Do you have any more AMAZING questions? I love your curiosity! Please type 'yes' or 'no'."
+                    more_questions_prompt = "That was such a great question. Do you have any more AMAZING questions? I love your curiosity. Please type 'yes' or 'no'."
                     print(f"⌨️  {more_questions_prompt}")
                     
                     # Synthesize the follow-up question
@@ -904,9 +904,25 @@ class AlgebraLectureStreamer:
             processed_text = self.math_wall.process_text(text)
             print(f"🧱 Math Wall output: '{processed_text[:50]}...'")
             
-            # Split processed text into manageable chunks
-            sentences = re.split(r'[.!?]+', processed_text)
-            text_chunks = [s.strip() for s in sentences if s.strip()]
+            # Split processed text into small chunks (15-20 words per chunk for fast streaming)
+            words = processed_text.split()
+            text_chunks = []
+            current_chunk = []
+            word_count = 0
+            
+            for word in words:
+                current_chunk.append(word)
+                word_count += 1
+                
+                # Create a chunk every 15-20 words or at sentence boundaries
+                if word_count >= 15 and (word.endswith('.') or word.endswith(',') or word_count >= 20):
+                    text_chunks.append(' '.join(current_chunk))
+                    current_chunk = []
+                    word_count = 0
+            
+            # Add remaining words as final chunk
+            if current_chunk:
+                text_chunks.append(' '.join(current_chunk))
             
             if not text_chunks:
                 print("❌ No text to synthesize")

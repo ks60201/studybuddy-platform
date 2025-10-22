@@ -8,6 +8,9 @@ import {
   LogOut,
   Brain,
   StickyNote,
+  Sparkles,
+  Zap,
+  Crown,
 } from "lucide-react";
 import { AUTH_TOKEN_KEY } from "../config";
 
@@ -42,7 +45,7 @@ const Navbar = ({ user, onLogout }: NavbarProps) => {
 
         <div className="navbar-menu neo-menu">
           <Link to="/ai-teacher" className="navbar-link neo-link">
-            <BookOpen size={18} />
+            <Crown size={18} />
             <span>AI Teacher</span>
           </Link>
           <Link to="/ai-doubt-solver" className="navbar-link neo-link">
@@ -93,8 +96,8 @@ const Navbar = ({ user, onLogout }: NavbarProps) => {
                 to="/register"
                 className="auth-btn register-btn neo-btn primary"
               >
-                <UserPlus size={16} />
-                <span>Register</span>
+                <Sparkles size={16} />
+                <span>Join Now</span>
               </Link>
             </div>
           )}

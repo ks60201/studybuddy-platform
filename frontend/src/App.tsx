@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { API_BASE_URL, AUTH_TOKEN_KEY } from "./config";
+import "./styles/visual-polish.css";
 import Navbar from "./components/Navbar";
 import HomePage from "./components/HomePage";
 import LoginForm from "./components/LoginForm";

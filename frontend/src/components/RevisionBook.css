@@ -1,7 +1,7 @@
-/* Extraordinary 3D Library Interface - Dark Theme */
+/* Modern Library Interface - Enhanced Dark Theme */
 .library-container {
   min-height: 100vh;
-  background: linear-gradient(to bottom, #030014, #0f1225);
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   position: relative;
   padding: 2rem;
   padding-top: 8rem;
@@ -11,6 +11,42 @@
   transform: translateZ(0);
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
+}
+
+.library-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(
+      circle at 20% 80%,
+      rgba(99, 102, 241, 0.15) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(139, 92, 246, 0.15) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 40% 40%,
+      rgba(236, 72, 153, 0.1) 0%,
+      transparent 50%
+    );
+  pointer-events: none;
+  animation: backgroundShift 20s ease-in-out infinite;
+}
+
+@keyframes backgroundShift {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
 }
 
 /* Floating Particles */
@@ -175,18 +211,22 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* Enhanced Library Header */
+/* Modern Library Header */
 .library-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
+  );
+  border-radius: 32px;
+  backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
 }
@@ -195,16 +235,20 @@
   content: "";
   position: absolute;
   top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255, 255, 255, 0.1),
-    transparent
-  );
-  animation: shimmer 3s infinite;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+  animation: headerGlow 3s ease-in-out infinite alternate;
+}
+
+@keyframes headerGlow {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes shimmer {
@@ -608,18 +652,22 @@
   scroll-snap-align: start;
 }
 
-/* Extraordinary Lecture Cards */
+/* Modern Lecture Cards */
 .lecture-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 1.5rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
+  );
+  backdrop-filter: blur(24px);
+  border-radius: 28px;
+  padding: 2rem;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   position: relative;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
 }
 
 .lecture-card::before {
@@ -628,34 +676,35 @@
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.1),
-    rgba(255, 255, 255, 0.05)
-  );
+  height: 2px;
+  background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
   opacity: 0;
   transition: opacity 0.3s ease;
-}
-
-.lecture-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .lecture-card:hover::before {
   opacity: 1;
 }
 
+.lecture-card:hover {
+  transform: translateY(-12px) scale(1.03);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
 .lecture-card.hovered {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  transform: translateY(-12px) scale(1.03);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
 }
 
 .lecture-card.bookmarked {
   border-color: #ffd700;
-  box-shadow: 0 8px 32px rgba(255, 215, 0, 0.2);
+  box-shadow: 0 12px 48px rgba(255, 215, 0, 0.3);
+}
+
+.lecture-card.bookmarked::before {
+  background: linear-gradient(90deg, #ffd700, #ffed4e, #ffd700);
+  opacity: 1;
 }
 
 .card-spine {
@@ -664,9 +713,44 @@
   top: 0;
   bottom: 0;
   width: 4px;
-  background: linear-gradient(180deg, #667eea, #764ba2);
+  background: linear-gradient(180deg, #667eea, #764ba2, #f093fb);
   border-radius: 2px;
   opacity: 0.8;
+  transition: all 0.3s ease;
+}
+
+.lecture-card:hover .card-spine {
+  width: 6px;
+  opacity: 1;
+}
+
+/* Modern Library Stats */
+.library-stats {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.05)
+  );
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(20px);
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .card-content {

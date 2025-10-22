@@ -27,6 +27,7 @@ const FlashcardPage: React.FC = () => {
   const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
   const [isFlashcardFlipped, setIsFlashcardFlipped] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isAutoPlay, setIsAutoPlay] = useState(false);
 
   useEffect(() => {
     // Get flashcard data from URL parameters
@@ -43,6 +44,28 @@ const FlashcardPage: React.FC = () => {
     }
     setLoading(false);
   }, []);
+
+  // Auto-play functionality
+  useEffect(() => {
+    if (isAutoPlay && flashcards) {
+      const interval = setInterval(() => {
+        // First show the answer
+        setIsFlashcardFlipped(true);
+
+        // After 2 seconds, move to next card and reset flip state
+        setTimeout(() => {
+          if (currentFlashcardIndex < flashcards.flashcards.length - 1) {
+            setCurrentFlashcardIndex((prev) => prev + 1);
+            setIsFlashcardFlipped(false);
+          } else {
+            setIsAutoPlay(false);
+            setIsFlashcardFlipped(false);
+          }
+        }, 2000);
+      }, 4000);
+      return () => clearInterval(interval);
+    }
+  }, [isAutoPlay, currentFlashcardIndex, flashcards]);
 
   // Flashcard navigation functions
   const nextFlashcard = () => {
@@ -199,6 +222,18 @@ const FlashcardPage: React.FC = () => {
               className="flip-btn-large"
             >
               {isFlashcardFlipped ? "🔄 Show Question" : "💡 Show Answer"}
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsAutoPlay(!isAutoPlay);
+              }}
+              className={`flashcard-nav-btn-large autoplay ${
+                isAutoPlay ? "active" : ""
+              }`}
+            >
+              {isAutoPlay ? "⏸️ Pause" : "▶️ Auto Play"}
             </button>
 
             <button
