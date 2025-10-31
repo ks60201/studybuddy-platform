@@ -323,7 +323,7 @@ class AlgebraLectureStreamer:
                         continue
                 
                 # Get audio chunk from queue
-                audio_chunk = self.audio_queue.get(timeout=1)
+                audio_chunk = self.audio_queue.get(timeout=0.01)
                 
                 if audio_chunk is None:  # Stop signal
                     break
@@ -876,14 +876,32 @@ class AlgebraLectureStreamer:
                         # Convert to bytes and add to queue
                         audio_bytes = audio_data.tobytes()
                         
-                        # Split into smaller chunks for streaming
-                        chunk_size = self.audio_chunk_size * 4  # 4 bytes per float32
+                        # Progressive chunk sizing for smooth streaming:
+                        # - Early chunks: Small (fast to start playing)
+                        # - Middle chunks: Medium (build buffer)
+                        # - Later chunks: Large (we have time from buffer)
+                        total_chunks = len(text_chunks)
+                        chunk_position = i / max(total_chunks - 1, 1)  # 0.0 to 1.0
+                        
+                        # Calculate progressive chunk size multiplier
+                        if chunk_position < 0.25:  # First 25% - smallest chunks
+                            size_multiplier = 1
+                        elif chunk_position < 0.75:  # Middle 50% - medium chunks
+                            size_multiplier = 2
+                        else:  # Last 25% - largest chunks
+                            size_multiplier = 4
+                        
+                        chunk_size = self.audio_chunk_size * size_multiplier * 4  # 4 bytes per float32
+                        
                         for j in range(0, len(audio_bytes), chunk_size):
                             chunk_bytes = audio_bytes[j:j + chunk_size]
-                            if len(chunk_bytes) == chunk_size:  # Only add complete chunks
-                                self.audio_queue.put(chunk_bytes)
+                            # Pad incomplete chunks with zeros to avoid gaps
+                            if len(chunk_bytes) < chunk_size:
+                                chunk_bytes += b'\x00' * (chunk_size - len(chunk_bytes))
+                            # Always add chunk to queue (complete or padded)
+                            self.audio_queue.put(chunk_bytes)
                         
-                        print(f"✅ Chunk {i+1} synthesized and queued")
+                        print(f"✅ Chunk {i+1} synthesized and queued (size_mult: {size_multiplier}x)")
                         
                     except Exception as e:
                         print(f"❌ Error synthesizing chunk {i+1}: {e}")
@@ -915,7 +933,7 @@ class AlgebraLectureStreamer:
                 word_count += 1
                 
                 # Create a chunk every 15-20 words or at sentence boundaries
-                if word_count >= 15 and (word.endswith('.') or word.endswith(',') or word_count >= 20):
+                if word_count >= 20 and (word.endswith('.') or word.endswith(',') or word_count >= 25):
                     text_chunks.append(' '.join(current_chunk))
                     current_chunk = []
                     word_count = 0
